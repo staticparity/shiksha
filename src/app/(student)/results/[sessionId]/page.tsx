@@ -3,6 +3,8 @@ import { redirect } from "next/navigation";
 import { ResultsClient } from "./client";
 import { calculateCredits } from "@/lib/scoring/mastery-calculator";
 
+export const dynamic = "force-dynamic";
+
 export default async function ResultsPage(props: PageProps<"/results/[sessionId]">) {
   const { sessionId } = await props.params;
 

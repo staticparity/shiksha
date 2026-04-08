@@ -11,6 +11,8 @@ import {
 } from "@/lib/scoring/mastery-calculator";
 import styles from "./page.module.css";
 
+export const dynamic = "force-dynamic";
+
 export default async function StudentDashboard() {
   const supabase = await createClient();
   const {

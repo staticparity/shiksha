@@ -1,5 +1,4 @@
 import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -109,73 +108,25 @@ export async function POST(req: Request) {
       return Response.json({ error: "classId and studentEmail are required" }, { status: 400 });
     }
 
-    // Find user by email
-    const { data: studentUser } = await supabase
-      .from("profiles")
-      .select("id")
-      .eq("id", (
-        await supabase.rpc("get_user_id_by_email", { p_email: studentEmail })
-      ).data)
-      .single();
+    // Look up student by email using secure RPC
+    const { data: student, error: lookupError } = await supabase
+      .rpc("find_student_by_email", {
+        p_email: studentEmail,
+        p_school_id: membership.school_id,
+      })
+      .single() as { data: { user_id: string; full_name: string } | null; error: any };
 
-    // Fallback: look up in auth.users via school_members
-    // Since we can't directly query auth.users from client, search profiles
-    // We'll look for school members with that user who are students
-    const { data: members } = await supabase
-      .from("school_members")
-      .select("user_id, profiles(full_name)")
-      .eq("school_id", membership.school_id)
-      .eq("role", "student");
-
-    // For now, search by checking all students - in production use an RPC
-    let studentId: string | null = null;
-
-    // Try to find student via profiles join
-    // Since we need email lookup, use a direct approach
-    const { data: allMembers } = await supabase
-      .from("school_members")
-      .select("user_id")
-      .eq("school_id", membership.school_id)
-      .eq("role", "student");
-
-    // We need to match by email - let's use a simpler approach
-    // Check if student already exists by looking up the email in profiles
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("id, full_name")
-      .ilike("full_name", `%${studentEmail.split("@")[0]}%`)
-      .limit(1)
-      .single();
-
-    if (!profile) {
+    if (lookupError || !student) {
       return Response.json(
-        { error: `No student found matching "${studentEmail}". The student must sign up first.` },
+        { error: `No student found with email "${studentEmail}" in your school. They must sign up first.` },
         { status: 404 }
-      );
-    }
-
-    studentId = profile.id;
-
-    // Verify student is in the school
-    const { data: isMember } = await supabase
-      .from("school_members")
-      .select("id")
-      .eq("user_id", studentId)
-      .eq("school_id", membership.school_id)
-      .eq("role", "student")
-      .single();
-
-    if (!isMember) {
-      return Response.json(
-        { error: "This user is not a student in your school" },
-        { status: 400 }
       );
     }
 
     // Enroll
     const { error } = await supabase
       .from("class_enrollments")
-      .insert({ class_id: classId, student_id: studentId })
+      .insert({ class_id: classId, student_id: student.user_id });
 
     if (error) {
       if (error.code === "23505") {
@@ -184,7 +135,7 @@ export async function POST(req: Request) {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    return Response.json({ success: true, studentName: profile.full_name });
+    return Response.json({ success: true, studentName: student.full_name });
   }
 
   // ── Get Teacher's Classes ─────────────────────────────────────

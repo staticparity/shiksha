@@ -9,26 +9,29 @@ import styles from "./page.module.css";
 
 interface TeachPageClientProps {
   topicId: string;
-  topic: {
-    title: string;
-    subject: string;
-    chapter: string | null;
-    class_id: string;
-    classes: {
-      school_id: string;
-    };
-  };
+  topicTitle: string;
+  topicSubject: string;
+  topicChapter: string | null;
+  classId: string;
+  schoolId: string;
   userId: string;
 }
 
-export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps) {
+export function TeachPageClient({
+  topicId,
+  topicTitle,
+  topicSubject,
+  topicChapter,
+  classId,
+  schoolId,
+  userId,
+}: TeachPageClientProps) {
   const router = useRouter();
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [isCreating, setIsCreating] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Ref to get current messages from ChatContainer
   const getMessagesRef = useRef<(() => any[]) | null>(null);
 
   const createSession = useCallback(async () => {
@@ -41,8 +44,8 @@ export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps
         .insert({
           student_id: userId,
           topic_id: topicId,
-          class_id: topic.class_id,
-          school_id: (topic as any).classes?.school_id,
+          class_id: classId,
+          school_id: schoolId,
           status: "active",
         })
         .select("id")
@@ -56,7 +59,7 @@ export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps
     } finally {
       setIsCreating(false);
     }
-  }, [topicId, topic, userId]);
+  }, [topicId, classId, schoolId, userId]);
 
   const handleFinish = useCallback(async () => {
     if (!sessionId) return;
@@ -64,13 +67,12 @@ export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps
     setError(null);
 
     try {
-      // Get messages from the chat container and format them as transcript
       const chatMessages = getMessagesRef.current?.() ?? [];
       const clientTranscript = chatMessages
-        .filter((msg: any) => msg.role === "user" || msg.role === "assistant")
-        .map((msg: any) => {
+        .filter((msg) => msg.role === "user" || msg.role === "assistant")
+        .map((msg) => {
           const text = msg.content
-            ?? msg.parts?.find((p: any) => p.type === "text")?.text
+            ?? msg.parts?.find((p: { type: string; text?: string }) => p.type === "text")?.text
             ?? "";
           return {
             role: msg.role === "user" ? "student" : "learner",
@@ -97,16 +99,15 @@ export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps
     }
   }, [sessionId, router]);
 
-  // Pre-session: start button
   if (!sessionId) {
     return (
       <div className={styles.preSession}>
         <div className={styles.preSessionCard}>
           <div className={styles.emoji}>🎓</div>
-          <h1 className={styles.preTitle}>Teach: {topic.title}</h1>
+          <h1 className={styles.preTitle}>Teach: {topicTitle}</h1>
           <p className={styles.preSubtitle}>
-            {topic.chapter ? `${topic.chapter} · ` : ""}
-            {topic.subject}
+            {topicChapter ? `${topicChapter} · ` : ""}
+            {topicSubject}
           </p>
           <p className={styles.preDescription}>
             You&apos;ll be explaining this topic to a curious AI learner who
@@ -138,7 +139,6 @@ export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps
     );
   }
 
-  // Scoring state
   if (isScoring) {
     return (
       <div className={styles.scoring}>
@@ -154,13 +154,12 @@ export function TeachPageClient({ topicId, topic, userId }: TeachPageClientProps
     );
   }
 
-  // Active session: chat
   return (
     <ChatContainer
       topicId={topicId}
-      topicTitle={topic.title}
-      topicSubject={topic.subject}
-      topicChapter={topic.chapter ?? undefined}
+      topicTitle={topicTitle}
+      topicSubject={topicSubject}
+      topicChapter={topicChapter ?? undefined}
       sessionId={sessionId}
       onFinish={handleFinish}
       getMessagesRef={getMessagesRef}

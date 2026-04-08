@@ -1,13 +1,13 @@
 /**
  * POST /api/mastery
- * 
+ *
  * Wisdom Agent scoring endpoint.
- * 
- * This is the ONLY place where the knowledge_base is accessed.
+ *
+ * This is the ONLY place where the knowledge_base is accessed for evaluation.
  * The Wisdom Agent evaluates the full transcript against ground truth
  * and returns structured mastery scoring.
- * 
- * This endpoint is called ONCE per session, when the student finishes.
+ *
+ * Called ONCE per session when the student finishes.
  */
 
 import { generateObject } from "ai";
@@ -24,6 +24,18 @@ import { awardCredits, updateStreak } from "@/lib/scoring/credit-engine";
 
 export const maxDuration = 60;
 
+interface TranscriptEntry {
+  role: "user" | "assistant" | "student" | "learner";
+  content: string;
+  timestamp?: string;
+}
+
+interface SessionTopic {
+  title: string;
+  subject: string;
+  knowledge_base: Record<string, unknown> | null;
+}
+
 export async function POST(req: Request) {
   try {
     const supabase = await createClient();
@@ -32,17 +44,20 @@ export async function POST(req: Request) {
     } = await supabase.auth.getUser();
 
     if (!user) {
-      return new Response("Unauthorized", { status: 401 });
+      return Response.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const { sessionId, clientTranscript } = await req.json();
+    const { sessionId, clientTranscript } = (await req.json()) as {
+      sessionId?: string;
+      clientTranscript?: TranscriptEntry[];
+    };
 
     if (!sessionId) {
-      return new Response("Missing sessionId", { status: 400 });
+      return Response.json({ error: "Missing sessionId" }, { status: 400 });
     }
 
     // Mark session as scoring (prevents double-scoring)
-    const { data: session, error: sessionError } = await supabase
+    const { data: rawSession, error: sessionError } = await supabase
       .from("sessions")
       .update({ status: "scoring" })
       .eq("id", sessionId)
@@ -63,30 +78,38 @@ export async function POST(req: Request) {
       )
       .single();
 
-    if (sessionError || !session) {
+    if (sessionError || !rawSession) {
       return Response.json(
         { error: "Session not found or already scored" },
         { status: 404 }
       );
     }
 
-    const topic = (session as any).topics;
-    let transcript = session.transcript as any[];
+    // Supabase returns joined relations as objects — type them properly
+    const topic = (rawSession as unknown as { topics: SessionTopic }).topics;
+    let transcript = rawSession.transcript as TranscriptEntry[] | null;
 
-    // If DB transcript is empty, use the client-provided transcript as fallback
-    // This handles the case where the onFinish callback in /api/chat failed silently
-    if ((!transcript || transcript.length < 2) && clientTranscript && clientTranscript.length >= 2) {
+    // If DB transcript is empty, fall back to client-provided transcript
+    if (
+      (!transcript || transcript.length < 2) &&
+      clientTranscript &&
+      clientTranscript.length >= 2
+    ) {
       transcript = clientTranscript;
 
-      // Also persist it to the DB for record-keeping
+      // Persist for record-keeping
       await supabase
         .from("sessions")
-        .update({ transcript: JSON.stringify(transcript), message_count: transcript.length })
+        .update({
+          transcript: JSON.stringify(transcript),
+          message_count: transcript.length,
+        })
         .eq("id", sessionId);
     }
 
     // Guard: don't score empty sessions
     if (!transcript || transcript.length < 2) {
+      // Revert to active so student can continue
       await supabase
         .from("sessions")
         .update({ status: "active" })
@@ -102,7 +125,7 @@ export async function POST(req: Request) {
       );
     }
 
-    // Wisdom Agent evaluation — this is the ONLY place knowledge_base is accessed
+    // Wisdom Agent evaluation
     const result = await generateObject({
       model: openai(WISDOM_MODEL),
       schema: MasteryResultSchema,
@@ -113,7 +136,7 @@ export async function POST(req: Request) {
 
     const mastery = result.object;
     const duration = Math.floor(
-      (Date.now() - new Date(session.started_at).getTime()) / 1000
+      (Date.now() - new Date(rawSession.started_at).getTime()) / 1000
     );
 
     // Persist mastery results
@@ -121,8 +144,8 @@ export async function POST(req: Request) {
       .from("sessions")
       .update({
         mastery_score: mastery.masteryScore,
-        strengths: mastery.strengths as any,
-        gaps: mastery.gaps as any,
+        strengths: mastery.strengths,
+        gaps: mastery.gaps,
         assessment: mastery.overallAssessment,
         recitation_detected: mastery.recitationDetected,
         follow_up_quality: mastery.followUpQuality,
@@ -137,7 +160,7 @@ export async function POST(req: Request) {
       supabase,
       user.id,
       sessionId,
-      session.school_id,
+      rawSession.school_id,
       mastery.masteryScore
     );
 
@@ -145,7 +168,7 @@ export async function POST(req: Request) {
     const streakResult = await updateStreak(
       supabase,
       user.id,
-      session.school_id
+      rawSession.school_id
     );
 
     return Response.json({
@@ -158,7 +181,10 @@ export async function POST(req: Request) {
   } catch (error) {
     console.error("[/api/mastery] Error:", error);
     return Response.json(
-      { error: "Scoring failed", message: "An unexpected error occurred during scoring." },
+      {
+        error: "Scoring failed",
+        message: "An unexpected error occurred during scoring.",
+      },
       { status: 500 }
     );
   }

@@ -18,7 +18,6 @@ interface SidebarProps {
 
 const studentNav: NavItem[] = [
   { href: "/dashboard", label: "Dashboard", icon: "🏠" },
-  { href: "/dashboard#topics", label: "Topics", icon: "📚" },
 ];
 
 const teacherNav: NavItem[] = [
