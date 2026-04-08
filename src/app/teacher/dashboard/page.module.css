@@ -1,0 +1,176 @@
+.container {
+  min-height: 100vh;
+  padding: var(--space-6);
+}
+
+.content {
+  max-width: 960px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+.header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+/* ── Overview Grid ───────────────────── */
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: var(--space-4);
+  margin-bottom: var(--space-2);
+}
+
+.stat {
+  text-align: center;
+}
+
+.statValue {
+  display: block;
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.statLabel {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Sections ────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Alerts ──────────────────────────── */
+
+.alertList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.alert {
+  font-size: var(--text-sm);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-md);
+  border-left: 3px solid;
+}
+
+.alertCritical {
+  border-left-color: var(--mastery-beginning);
+  background: var(--mastery-beginning-bg);
+  color: var(--mastery-beginning);
+}
+
+.alertWarning {
+  border-left-color: var(--mastery-developing);
+  background: var(--mastery-developing-bg);
+  color: var(--mastery-developing);
+}
+
+/* ── Heatmap ─────────────────────────── */
+
+.heatmapWrapper {
+  overflow-x: auto;
+}
+
+.heatmap {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--text-sm);
+}
+
+.heatmapHeader {
+  padding: var(--space-3) var(--space-3);
+  text-align: center;
+  font-weight: var(--font-semibold);
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  border-bottom: 1px solid var(--glass-border);
+  white-space: nowrap;
+  position: sticky;
+  top: 0;
+  background: var(--bg-secondary);
+}
+
+.heatmapHeader:first-child {
+  text-align: left;
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--bg-secondary);
+}
+
+.heatmapStudent {
+  padding: var(--space-2-5) var(--space-3);
+  font-weight: var(--font-medium);
+  color: var(--text-primary);
+  white-space: nowrap;
+  border-bottom: 1px solid var(--glass-border);
+  position: sticky;
+  left: 0;
+  background: var(--bg-glass);
+  backdrop-filter: blur(var(--glass-blur));
+}
+
+.heatmapCell {
+  padding: var(--space-2) var(--space-3);
+  text-align: center;
+  border-bottom: 1px solid var(--glass-border);
+  font-variant-numeric: tabular-nums;
+  transition: background var(--transition-fast);
+}
+
+.heatmapCell:hover {
+  background: var(--bg-glass-hover) !important;
+}
+
+.cellScore {
+  font-weight: var(--font-semibold);
+  margin-right: var(--space-1);
+}
+
+.cellEmoji {
+  font-size: var(--text-xs);
+}
+
+/* ── Mobile ──────────────────────────── */
+
+@media (max-width: 768px) {
+  .overviewGrid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}

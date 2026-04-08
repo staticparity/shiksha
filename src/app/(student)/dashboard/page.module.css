@@ -1,0 +1,208 @@
+.container {
+  min-height: 100vh;
+  padding: var(--space-6);
+}
+
+.content {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+/* ── Header ──────────────────────────── */
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.title {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-1);
+}
+
+.subtitle {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+.streakBadge {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1-5);
+  background: rgba(251, 191, 36, 0.1);
+  color: var(--mastery-developing);
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  padding: var(--space-1-5) var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid rgba(251, 191, 36, 0.15);
+}
+
+/* ── Sections ────────────────────────── */
+
+.section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.sectionTitle {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* ── Topics ──────────────────────────── */
+
+.topicList {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.topicCard {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.topicLeft {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+}
+
+.topicEmoji {
+  font-size: var(--text-xl);
+  margin-top: 2px;
+}
+
+.topicName {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--text-primary);
+  margin-bottom: var(--space-0-5);
+}
+
+.topicMeta {
+  display: block;
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.topicLastAttempt {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  margin-top: var(--space-1);
+}
+
+.topicRight {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.topicScore {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  font-variant-numeric: tabular-nums;
+}
+
+.teachCta {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--accent-primary);
+  opacity: 0;
+  transition: opacity var(--transition-fast);
+}
+
+.topicCard:hover .teachCta {
+  opacity: 1;
+}
+
+/* ── Empty State ─────────────────────── */
+
+.emptyState {
+  text-align: center;
+  padding: var(--space-8) var(--space-4);
+}
+
+.emptyIcon {
+  font-size: 2.5rem;
+  display: block;
+  margin-bottom: var(--space-3);
+}
+
+.emptyText {
+  font-size: var(--text-sm);
+  color: var(--text-secondary);
+}
+
+/* ── Credits ─────────────────────────── */
+
+.creditsRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-6);
+}
+
+.creditStat {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.creditIcon {
+  font-size: var(--text-lg);
+}
+
+.creditValue {
+  font-size: var(--text-lg);
+  font-weight: var(--font-bold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.creditLabel {
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+}
+
+.creditDivider {
+  width: 1px;
+  height: 24px;
+  background: var(--glass-border);
+}
+
+/* ── Mobile ──────────────────────────── */
+
+@media (max-width: 640px) {
+  .container {
+    padding: var(--space-4);
+  }
+
+  .header {
+    flex-direction: column;
+    gap: var(--space-3);
+  }
+
+  .creditsRow {
+    flex-wrap: wrap;
+    gap: var(--space-4);
+  }
+
+  .teachCta {
+    opacity: 1;
+  }
+}
