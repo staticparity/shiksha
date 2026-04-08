@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
-import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 interface ClassData {
@@ -26,9 +25,7 @@ export default function TeacherSetupPage() {
   // Topic form
   const [selectedClassId, setSelectedClassId] = useState("");
   const [topicTitle, setTopicTitle] = useState("");
-  const [topicSubject, setTopicSubject] = useState("");
   const [topicChapter, setTopicChapter] = useState("");
-  const [topicDescription, setTopicDescription] = useState("");
   const [concepts, setConcepts] = useState([{ concept: "", description: "" }]);
 
   // Student form
@@ -60,6 +57,7 @@ export default function TeacherSetupPage() {
     setTimeout(() => setMessage(null), 4000);
   };
 
+  // Auto-advance after successful class creation
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -77,11 +75,12 @@ export default function TeacherSetupPage() {
     setLoading(false);
 
     if (res.ok) {
-      showMessage("success", `Class "${data.name}" created!`);
+      showMessage("success", `Class "${data.name}" created! Now add a topic.`);
       setClassName("");
       setClassSubject("");
       setClassGrade("");
-      loadClasses();
+      await loadClasses();
+      setActiveTab("topic"); // Auto-advance to topic creation
     } else {
       showMessage("error", data.error || "Failed to create class");
     }
@@ -90,6 +89,10 @@ export default function TeacherSetupPage() {
   const handleCreateTopic = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+
+    // Get the selected class to auto-fill subject
+    const selectedClass = classes.find((c) => c.id === selectedClassId);
+
     const res = await fetch("/api/teacher", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -97,9 +100,8 @@ export default function TeacherSetupPage() {
         action: "create_topic",
         classId: selectedClassId,
         title: topicTitle,
-        subject: topicSubject,
+        subject: selectedClass?.subject ?? "",
         chapter: topicChapter,
-        description: topicDescription,
         knowledgeConcepts: concepts.filter((c) => c.concept.trim()),
       }),
     });
@@ -107,11 +109,9 @@ export default function TeacherSetupPage() {
     setLoading(false);
 
     if (res.ok) {
-      showMessage("success", `Topic "${data.title}" created!`);
+      showMessage("success", `Topic "${data.title}" added! Add another or enroll students.`);
       setTopicTitle("");
-      setTopicSubject("");
       setTopicChapter("");
-      setTopicDescription("");
       setConcepts([{ concept: "", description: "" }]);
     } else {
       showMessage("error", data.error || "Failed to create topic");
@@ -161,7 +161,7 @@ export default function TeacherSetupPage() {
       <div className={styles.content}>
         <h1 className={styles.pageTitle}>⚙️ Manage Class</h1>
         <p className={styles.pageSubtitle}>
-          Create classes, add topics, and enroll students.
+          Set up your class in 3 steps: create a class, add what students should learn, then invite them.
         </p>
 
         {/* Message Toast */}
@@ -171,35 +171,38 @@ export default function TeacherSetupPage() {
           </div>
         )}
 
-        {/* Tabs */}
+        {/* Step Tabs */}
         <div className={styles.tabs}>
           <button
             className={`${styles.tab} ${activeTab === "class" ? styles.tabActive : ""}`}
             onClick={() => setActiveTab("class")}
           >
-            📁 New Class
+            <span className={styles.tabStep}>1</span> Create Class
           </button>
           <button
             className={`${styles.tab} ${activeTab === "topic" ? styles.tabActive : ""}`}
             onClick={() => setActiveTab("topic")}
             disabled={classes.length === 0}
           >
-            📘 New Topic
+            <span className={styles.tabStep}>2</span> Add Topics
           </button>
           <button
             className={`${styles.tab} ${activeTab === "student" ? styles.tabActive : ""}`}
             onClick={() => setActiveTab("student")}
             disabled={classes.length === 0}
           >
-            👤 Add Student
+            <span className={styles.tabStep}>3</span> Invite Students
           </button>
         </div>
 
-        {/* Create Class */}
+        {/* ── Step 1: Create Class ─────────────────────────────── */}
         {activeTab === "class" && (
           <GlassCard>
             <form onSubmit={handleCreateClass} className={styles.form}>
-              <h2 className={styles.formTitle}>Create a New Class</h2>
+              <h2 className={styles.formTitle}>Create a Class</h2>
+              <p className={styles.formHint}>
+                A class groups your students and the topics you want them to learn.
+              </p>
               <div className={styles.field}>
                 <label className={styles.label}>Class Name</label>
                 <input
@@ -232,20 +235,20 @@ export default function TeacherSetupPage() {
                 </div>
               </div>
               <button className={styles.submitBtn} type="submit" disabled={loading}>
-                {loading ? "Creating..." : "Create Class"}
+                {loading ? "Creating..." : "Create Class →"}
               </button>
             </form>
           </GlassCard>
         )}
 
-        {/* Create Topic */}
+        {/* ── Step 2: Add Topic ────────────────────────────────── */}
         {activeTab === "topic" && (
           <GlassCard>
             <form onSubmit={handleCreateTopic} className={styles.form}>
               <h2 className={styles.formTitle}>Add a Topic</h2>
               <p className={styles.formHint}>
-                The knowledge base concepts are what the Wisdom Agent uses to score students.
-                Be specific — these are your answer key.
+                A topic is something students learn — like &quot;Photosynthesis&quot; or &quot;Quadratic Equations.&quot;
+                Students will teach this topic back to the AI, and their understanding gets scored.
               </p>
 
               <div className={styles.field}>
@@ -266,7 +269,7 @@ export default function TeacherSetupPage() {
 
               <div className={styles.fieldRow}>
                 <div className={styles.field}>
-                  <label className={styles.label}>Topic Title</label>
+                  <label className={styles.label}>Topic Name</label>
                   <input
                     className={styles.input}
                     placeholder="e.g. Photosynthesis"
@@ -275,19 +278,6 @@ export default function TeacherSetupPage() {
                     required
                   />
                 </div>
-                <div className={styles.field}>
-                  <label className={styles.label}>Subject</label>
-                  <input
-                    className={styles.input}
-                    placeholder="e.g. Biology"
-                    value={topicSubject}
-                    onChange={(e) => setTopicSubject(e.target.value)}
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className={styles.fieldRow}>
                 <div className={styles.field}>
                   <label className={styles.label}>Chapter (optional)</label>
                   <input
@@ -299,42 +289,38 @@ export default function TeacherSetupPage() {
                 </div>
               </div>
 
-              <div className={styles.field}>
-                <label className={styles.label}>Description (optional)</label>
-                <textarea
-                  className={styles.textarea}
-                  placeholder="Brief context about what students should know..."
-                  value={topicDescription}
-                  onChange={(e) => setTopicDescription(e.target.value)}
-                  rows={2}
-                />
-              </div>
-
-              {/* Knowledge Base Concepts */}
+              {/* Key Things to Know */}
               <div className={styles.conceptsSection}>
                 <label className={styles.label}>
-                  Knowledge Base — Key Concepts
-                  <span className={styles.labelHint}>(the Wisdom Agent's answer key)</span>
+                  What should students know about this topic?
                 </label>
+                <p className={styles.conceptHint}>
+                  List the key things a student should be able to explain.
+                  The AI uses this as its scoring rubric — it won&apos;t show these to students.
+                </p>
                 {concepts.map((c, i) => (
                   <div key={i} className={styles.conceptRow}>
-                    <input
-                      className={styles.conceptInput}
-                      placeholder="Concept name"
-                      value={c.concept}
-                      onChange={(e) => updateConcept(i, "concept", e.target.value)}
-                    />
-                    <input
-                      className={styles.conceptDesc}
-                      placeholder="What students should explain about this concept..."
-                      value={c.description}
-                      onChange={(e) => updateConcept(i, "description", e.target.value)}
-                    />
+                    <div className={styles.conceptNumber}>{i + 1}</div>
+                    <div className={styles.conceptFields}>
+                      <input
+                        className={styles.conceptInput}
+                        placeholder="Key idea (e.g. &quot;Role of chlorophyll&quot;)"
+                        value={c.concept}
+                        onChange={(e) => updateConcept(i, "concept", e.target.value)}
+                      />
+                      <input
+                        className={styles.conceptDesc}
+                        placeholder="What a correct explanation looks like (e.g. &quot;Chlorophyll absorbs light energy for the reaction&quot;)"
+                        value={c.description}
+                        onChange={(e) => updateConcept(i, "description", e.target.value)}
+                      />
+                    </div>
                     {concepts.length > 1 && (
                       <button
                         type="button"
                         className={styles.removeBtn}
                         onClick={() => removeConcept(i)}
+                        aria-label="Remove"
                       >
                         ✕
                       </button>
@@ -342,24 +328,25 @@ export default function TeacherSetupPage() {
                   </div>
                 ))}
                 <button type="button" className={styles.addConceptBtn} onClick={addConcept}>
-                  + Add Concept
+                  + Add another
                 </button>
               </div>
 
               <button className={styles.submitBtn} type="submit" disabled={loading}>
-                {loading ? "Creating..." : "Create Topic"}
+                {loading ? "Creating..." : "Add Topic"}
               </button>
             </form>
           </GlassCard>
         )}
 
-        {/* Add Student */}
+        {/* ── Step 3: Invite Student ──────────────────────────── */}
         {activeTab === "student" && (
           <GlassCard>
             <form onSubmit={handleAddStudent} className={styles.form}>
-              <h2 className={styles.formTitle}>Enroll a Student</h2>
+              <h2 className={styles.formTitle}>Invite a Student</h2>
               <p className={styles.formHint}>
-                The student must have already signed up and been added to your school.
+                The student must have already created an account on Shiksha.
+                Enter their email to add them to a class.
               </p>
 
               <div className={styles.field}>
@@ -379,11 +366,11 @@ export default function TeacherSetupPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Student Email</label>
+                <label className={styles.label}>Student&apos;s Email</label>
                 <input
                   className={styles.input}
                   type="email"
-                  placeholder="student@school.edu"
+                  placeholder="student@gmail.com"
                   value={studentEmail}
                   onChange={(e) => setStudentEmail(e.target.value)}
                   required
