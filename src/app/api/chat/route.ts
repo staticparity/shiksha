@@ -1,14 +1,16 @@
 /**
  * POST /api/chat
  * 
- * Learner Agent streaming endpoint.
+ * Dual-agent streaming endpoint.
  * 
- * This is the core of Shiksha. The student sends a message,
- * the Learner Agent (zero knowledge) responds with questions.
+ * FLOW:
+ *   1. Student sends message
+ *   2. Evaluator Agent (has knowledge base) scores the message → critique
+ *   3. Learner Agent (has critique, NOT knowledge) responds with Socratic questioning
+ *   4. Response streams back to student
  * 
- * CRITICAL: The topic's knowledge_base is NEVER loaded here.
- * The Learner only gets the topic title. This is not a bug. 
- * This is the entire security model.
+ * The student only sees the Learner's response. The Evaluator's output
+ * is internal — it steers the Learner without leaking answers.
  */
 
 import { streamText } from "ai";
@@ -20,6 +22,7 @@ import {
   LEARNER_TEMPERATURE,
   MAX_MESSAGES_PER_SESSION,
 } from "@/lib/agents/learner";
+import { evaluateStudentMessage } from "@/lib/agents/evaluator";
 
 export const maxDuration = 30;
 
@@ -40,11 +43,11 @@ export async function POST(req: Request) {
       return new Response("Missing topicId or sessionId", { status: 400 });
     }
 
-    // Fetch topic metadata ONLY (title, subject, chapter)
-    // NEVER fetch knowledge_base for the Learner Agent
+    // Fetch topic metadata — title + subject for the Learner,
+    // and knowledge_base for the Evaluator
     const { data: topic } = await supabase
       .from("topics")
-      .select("title, subject, chapter")
+      .select("title, subject, chapter, description, knowledge_base")
       .eq("id", topicId)
       .single();
 
@@ -79,10 +82,8 @@ export async function POST(req: Request) {
     }
 
     // Convert v6 parts-based messages to classic {role, content} format
-    // TextStreamChatTransport sends: { role, parts: [{ type: "text", text }] }
-    // streamText expects: { role, content }
     const normalizedMessages = (messages as any[]).map((msg: any) => {
-      if (msg.content) return msg; // already classic format
+      if (msg.content) return msg;
       const textPart = msg.parts?.find((p: any) => p.type === "text");
       return {
         role: msg.role,
@@ -90,10 +91,36 @@ export async function POST(req: Request) {
       };
     });
 
-    // Stream response from Learner Agent
+    // ── Step 1: Evaluator Agent (runs on student's latest message) ──
+    // Only run evaluator after the first student message (not on greeting)
+    const lastStudentMsg = normalizedMessages
+      .filter((m: any) => m.role === "user")
+      .pop();
+
+    let evalCritique: string | null = null;
+
+    if (lastStudentMsg?.content && topic.knowledge_base) {
+      try {
+        const evalResult = await evaluateStudentMessage(
+          topic.title,
+          topic.description,
+          topic.knowledge_base,
+          lastStudentMsg.content
+        );
+        evalCritique = evalResult.critique;
+        console.log(
+          `[Evaluator] score=${evalResult.understandingScore} critique="${evalResult.critique}"`
+        );
+      } catch (evalError) {
+        // Evaluator failure is non-fatal — Learner works without it
+        console.warn("[Evaluator] Failed, continuing without critique:", evalError);
+      }
+    }
+
+    // ── Step 2: Learner Agent (gets critique, NOT knowledge base) ──
     const result = streamText({
       model: openai("gpt-4o-mini"),
-      system: buildLearnerPrompt(topic.title, topic.subject),
+      system: buildLearnerPrompt(topic.title, topic.subject, evalCritique),
       messages: normalizedMessages,
       maxOutputTokens: LEARNER_MAX_TOKENS,
       temperature: LEARNER_TEMPERATURE,
@@ -128,7 +155,7 @@ export async function POST(req: Request) {
             .from("sessions")
             .update({
               total_tokens: session.message_count > 0
-                ? undefined // Will be accumulated via RPC
+                ? undefined
                 : ((usage.inputTokens ?? 0) + (usage.outputTokens ?? 0)),
             })
             .eq("id", sessionId);
