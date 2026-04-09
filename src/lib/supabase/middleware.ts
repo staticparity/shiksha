@@ -29,10 +29,24 @@ export async function updateSession(request: NextRequest) {
     }
   );
 
-  // Refresh session - important for server components
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+  // Refresh session — handle stale tokens gracefully
+  let user = null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    user = data.user;
+  } catch {
+    // Stale refresh token — clear cookies and redirect to login
+    const url = request.nextUrl.clone();
+    url.pathname = "/login";
+    const response = NextResponse.redirect(url);
+    // Clear all Supabase cookies
+    request.cookies.getAll().forEach((cookie) => {
+      if (cookie.name.startsWith("sb-")) {
+        response.cookies.delete(cookie.name);
+      }
+    });
+    return response;
+  }
 
   // Public routes that don't require auth
   const publicRoutes = ["/", "/login", "/signup", "/callback"];
