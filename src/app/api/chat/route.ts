@@ -22,7 +22,7 @@ import {
   LEARNER_TEMPERATURE,
   MAX_MESSAGES_PER_SESSION,
 } from "@/lib/agents/learner";
-import { evaluateStudentMessage } from "@/lib/agents/evaluator";
+import { evaluateStudentMessage, ZERO_SIGNALS } from "@/lib/agents/evaluator";
 
 export const maxDuration = 30;
 
@@ -115,6 +115,11 @@ export async function POST(req: Request) {
     // ── Step 1: Evaluator Agent ─────────────────────────────────
     const lastStudentMsg = messages.filter((m) => m.role === "user").pop();
     let evalCritique: string | null = null;
+    // Which teaching components THIS message touches — sent to the client via
+    // a response header so Pip's "signals" checklist can light up live. The
+    // client accumulates these across turns (see chat-container.tsx); a
+    // false here just means "nothing new," never erases an earlier true.
+    let turnSignals = ZERO_SIGNALS;
 
     if (lastStudentMsg && topic.knowledge_base) {
       try {
@@ -125,6 +130,7 @@ export async function POST(req: Request) {
           lastStudentMsg.content as string
         );
         evalCritique = evalResult.critique;
+        turnSignals = evalResult.signals;
       } catch (evalError) {
         // Evaluator failure is non-fatal
         console.warn("[Evaluator] Failed:", evalError);
@@ -174,7 +180,9 @@ export async function POST(req: Request) {
       },
     });
 
-    return result.toTextStreamResponse();
+    return result.toTextStreamResponse({
+      headers: { "X-Pip-Signals": JSON.stringify(turnSignals) },
+    });
   } catch (error) {
     console.error("[/api/chat] Error:", error);
     return new Response("Internal server error", { status: 500 });

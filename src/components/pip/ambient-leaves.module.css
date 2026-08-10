@@ -1,0 +1,26 @@
+.field {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.leaf {
+  position: absolute;
+  top: -8vh;
+  opacity: 0;
+  animation-name: drift;
+  animation-timing-function: linear;
+  animation-iteration-count: infinite;
+}
+
+@keyframes drift {
+  0% { transform: translateY(-8vh) translateX(0) rotate(0); opacity: 0; }
+  10%, 90% { opacity: 0.4; }
+  100% { transform: translateY(112vh) translateX(40px) rotate(320deg); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .leaf { display: none; }
+}

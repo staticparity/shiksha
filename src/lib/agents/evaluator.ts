@@ -31,9 +31,41 @@ export const EvalResultSchema = z.object({
     .describe(
       "Internal feedback for the teacher on whether to push harder, drop hints, or follow naturally. 1-2 sentences max."
     ),
+  signals: z
+    .object({
+      definition: z
+        .boolean()
+        .describe("Student stated a clear definition — what the concept IS."),
+      example: z
+        .boolean()
+        .describe("Student gave a concrete example, analogy, or scenario."),
+      mechanism: z
+        .boolean()
+        .describe("Student explained HOW it works — the process or steps."),
+      cause: z
+        .boolean()
+        .describe("Student explained WHY it happens — the underlying reason or cause."),
+      connection: z
+        .boolean()
+        .describe("Student connected the idea to another concept, topic, or prior turn."),
+    })
+    .describe(
+      "Which teaching components THIS message alone touches — judge only what's " +
+        "present here, not the conversation so far. The caller accumulates these " +
+        "across turns; a false here does not erase a true from an earlier turn."
+    ),
 });
 
 export type EvalResult = z.infer<typeof EvalResultSchema>;
+export type TeachingSignals = EvalResult["signals"];
+
+export const ZERO_SIGNALS: TeachingSignals = {
+  definition: false,
+  example: false,
+  mechanism: false,
+  cause: false,
+  connection: false,
+};
 
 /**
  * Run a lightweight evaluation of the student's latest message.
@@ -71,7 +103,12 @@ Your critique should be 1-2 sentences of INTERNAL coaching for the tutor — wha
 - "Student is lost. They confused X with Y. Try nudging them toward thinking about [related concept]."
 - "Partial understanding. They got the what but not the why. Push for mechanism."
 - "Strong grasp. Move to edge cases or connections to other topics."
-- "Student seems disengaged. Try connecting to something relatable."`,
+- "Student seems disengaged. Try connecting to something relatable."
+
+Also judge which teaching components THIS message touches on (definition,
+example, mechanism, cause, connection — see schema). Judge only this message
+in isolation, not the conversation history. A message can touch several at
+once, or none.`,
     prompt: latestMessage,
     temperature: EVALUATOR_TEMPERATURE,
   });
