@@ -299,7 +299,7 @@ select.input {
 
 .submitBtn {
   padding: var(--space-3) var(--space-6);
-  background: var(--accent-gradient);
+  background: var(--accent-primary);
   color: white;
   border: none;
   border-radius: var(--radius-md);

@@ -49,13 +49,14 @@
 /* ── Variants ────────────────────────── */
 
 .primary {
-  background: var(--accent-gradient);
+  background: var(--accent-primary);
   color: var(--text-inverse);
   font-weight: var(--font-semibold);
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
 }
 
 .primary:hover:not(:disabled) {
+  background: var(--accent-primary-deep);
   box-shadow: var(--shadow-glow-teal), 0 2px 8px rgba(0, 0, 0, 0.3);
   transform: translateY(-1px);
 }

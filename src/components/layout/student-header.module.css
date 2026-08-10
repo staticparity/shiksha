@@ -39,10 +39,7 @@
 .logoText {
   font-size: var(--text-lg);
   font-weight: var(--font-bold);
-  background: var(--accent-gradient);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+  color: var(--accent-primary);
 }
 
 .backLink {
@@ -98,7 +95,7 @@
   width: 36px;
   height: 36px;
   border-radius: var(--radius-full);
-  background: var(--accent-gradient);
+  background: var(--accent-primary);
   color: white;
   font-size: var(--text-xs);
   font-weight: var(--font-bold);

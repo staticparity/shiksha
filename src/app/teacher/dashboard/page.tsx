@@ -43,7 +43,7 @@ export default async function TeacherDashboard() {
             style={{
               display: "inline-block",
               padding: "var(--space-3) var(--space-6)",
-              background: "var(--accent-gradient)",
+              background: "var(--accent-primary)",
               color: "white",
               borderRadius: "var(--radius-md)",
               textDecoration: "none",
