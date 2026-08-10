@@ -77,6 +77,7 @@ Run the SQL migrations against your Supabase project. Go to **Supabase Dashboard
 
 1. `supabase/migrations/001_initial_schema.sql` — tables, trigger, RPC functions
 2. `supabase/migrations/002_rls_policies.sql` — Row-Level Security policies
+3. `supabase/migrations/003_two_axis_scoring.sql` — understanding_band/explanation_band/misconceptions columns (two-axis diagnostic scoring)
 
 Or if you have the Supabase CLI linked:
 
@@ -143,12 +144,64 @@ Open [http://localhost:3000](http://localhost:3000).
 ### 7. Verify Everything Works
 
 ```bash
-# Unit tests (73 tests)
+# Unit tests (98 tests)
 pnpm test
 
 # Build check
 pnpm build
 ```
+
+---
+
+## Production Deployment
+
+The app has never had a confirmed live deployment — this is the checklist for the
+first one (Vercel + a fresh Supabase project; the app is stack-agnostic on hosting,
+but Vercel is the natural fit for Next.js).
+
+### 1. New Supabase project
+
+1. Create a project at [supabase.com](https://supabase.com) (free tier is fine to
+   start).
+2. **Supabase Dashboard → SQL Editor**, run in order:
+   - `supabase/migrations/001_initial_schema.sql`
+   - `supabase/migrations/002_rls_policies.sql`
+   - `supabase/migrations/003_two_axis_scoring.sql`
+   - The helper RPC block in [step 3 above](#3-database-setup) (`find_student_by_email`,
+     `increment_session_tokens`) — not yet folded into a migration file.
+3. Optionally run `supabase/seed.sql` if you want sample data instead of creating a
+   class/topic by hand.
+4. Note the **Project URL** and **anon public key** from Settings → API — you'll need
+   both for Vercel's env vars.
+
+### 2. Deploy to Vercel
+
+1. [vercel.com/new](https://vercel.com/new) → import `staticparity/shiksha` from
+   GitHub (grant Vercel repo access if this is the first import).
+2. Framework preset auto-detects as Next.js — no changes needed.
+3. Add environment variables (Project Settings → Environment Variables, or during
+   import): `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`,
+   `OPENAI_API_KEY` — same three as `.env.local`, values from the new Supabase
+   project (step 1) and your OpenAI account. Never commit these — `.env.local` and
+   `.env.example` with real values are both gitignored/reverted for a reason.
+4. Deploy. Vercel builds with `pnpm` automatically (detected from `pnpm-lock.yaml`).
+
+### 3. Point Supabase Auth at the real URL
+
+Chicken-and-egg: you only get the production URL after the first deploy. Once you
+have it, go back to **Supabase Dashboard → Authentication → Settings** and update:
+
+- **Site URL**: `https://your-app.vercel.app` (or your custom domain)
+- **Redirect URLs**: add `https://your-app.vercel.app/callback`
+
+Auth won't work correctly against the deployed app until this step is done — signup
+and login will redirect back to `localhost`.
+
+### 4. Verify
+
+Repeat [step 6, First-Time Setup](#6-first-time-setup) against the production URL
+instead of localhost — sign up as both a teacher and a student, enroll, run a full
+teach-back session, and confirm a mastery score comes back.
 
 ---
 
