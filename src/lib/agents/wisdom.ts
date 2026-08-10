@@ -12,7 +12,7 @@
  * It returns structured mastery scoring.
  */
 
-import { z } from "zod/v4";
+import { z } from "zod";
 
 export const WISDOM_MODEL = "gpt-4o" as const;
 export const WISDOM_TEMPERATURE = 0.2;
@@ -25,10 +25,60 @@ export const GapSchema = z.object({
   explanation: z.string().describe("What was missing or wrong in the student's explanation"),
 });
 
+// Four-level band scale (Secure/Partial/Prompt-dependent/Unresolved), matching
+// Master_Conversational_Assessment_Framework_Examiner-Student.pdf Table 4.
+export const AXIS_BANDS = ["secure", "partial", "prompt_dependent", "unresolved"] as const;
+export type AxisBand = (typeof AXIS_BANDS)[number];
+
 export const MasteryResultSchema = z.object({
   masteryScore: z.number().min(0).max(100).describe("Overall mastery score from 0-100"),
+  understandingBand: z
+    .enum(AXIS_BANDS)
+    .describe(
+      "Does the student actually grasp the concept — independent of how well they can put it into words? " +
+        "Score this from content correctness alone; ignore fluency, organization, and word choice entirely. " +
+        "secure: the model, mechanism, and causal links are correct, with no rescue needed. " +
+        "partial: mostly correct, one identifiable gap in the underlying model remains. " +
+        "prompt_dependent: the correct model only emerged after a follow-up question resolved a specific gap. " +
+        "unresolved: the underlying model is wrong or absent, even after follow-ups."
+    ),
+  explanationBand: z
+    .enum(AXIS_BANDS)
+    .describe(
+      "Can the student communicate what they know clearly to a NOVICE audience — independent of whether the " +
+        "content is correct? Score this from clarity, organization, own-words phrasing, AND audience fit; ignore " +
+        "whether the content is right. Audience fit is not optional: technical, jargon-dense phrasing that a " +
+        "novice could not follow is NOT secure, even if it is precise and well-organized — unpacked, novice- " +
+        "legible language is required for secure. A fluent, well-organized, AUDIENCE-APPROPRIATE but WRONG " +
+        "explanation scores high here and low on understandingBand — do not let one axis pull the other toward " +
+        "it. secure: clear, well-sequenced, in the student's own words, and a novice with no background could " +
+        "follow it without needing terms defined. partial: understandable but has structural gaps, OR leans on " +
+        "unexplained jargon/technical terms a novice wouldn't know. prompt_dependent: needed a simplification or " +
+        "rephrasing request to become clear to a novice. unresolved: still unclear, circular, or incoherent after " +
+        "follow-ups."
+    ),
   strengths: z.array(z.string()).describe("Concepts the student explained well"),
   gaps: z.array(GapSchema).describe("Knowledge gaps identified"),
+  misconceptions: z
+    .array(
+      z.object({
+        concept: z.string().describe("Which of the topic's common_misconceptions this is, verbatim"),
+        status: z
+          .enum(["active", "corrected", "accepted"])
+          .describe(
+            "active: the student holds this misconception and it was not resolved this session. " +
+              "corrected: the student held it but revised their view correctly during the session, " +
+              "unprompted or after a challenge. accepted: the system tested this misconception (e.g. a " +
+              "naive-challenge probe) and the student agreed with a FALSE claim — this must be corrected " +
+              "explicitly, never left silently wrong."
+          ),
+      })
+    )
+    .describe(
+      "Only include entries for misconceptions from the topic's common_misconceptions list that this " +
+        "transcript actually provides evidence about. A session can surface more than one. Empty array " +
+        "if no misconception was evident either way."
+    ),
   overallAssessment: z.string().describe("1-2 sentence summary of the student's understanding"),
   recitationDetected: z.boolean().describe("Whether the student appeared to copy-paste rather than explain in their own words"),
   followUpQuality: z.enum(["excellent", "good", "weak", "evasive"]).describe("How well the student handled follow-up questions"),
@@ -73,6 +123,30 @@ Given the conversation transcript between the student (who was teaching) and the
    - Jumping between topics randomly = low clarity
    - Using jargon without defining it = reduced clarity
    - Good analogies and examples = bonus clarity
+
+TWO-AXIS SCORING (understandingBand and explanationBand):
+Score these as two INDEPENDENT judgments. They frequently diverge, and conflating
+them is the single most common mistake:
+- A student can be fluent, confident, and completely WRONG. Example: "Giraffes
+  stretched their necks reaching for leaves, and that got passed to their offspring."
+  This is clear, well-organized, in the student's own words (explanationBand: secure)
+  — and it is Lamarckian, factually backwards (understandingBand: unresolved).
+- A student can have the correct model but struggle to express it. Example: technically
+  precise, jargon-heavy phrasing that is accurate but incomprehensible to a novice
+  (understandingBand: secure, explanationBand: partial or prompt_dependent), OR halting,
+  imprecise phrasing that is nonetheless pointing at the right mechanism.
+Do not let a strong score on one axis pull the other one up. Score each from its own
+evidence only.
+
+MISCONCEPTION TRACKING:
+Check the transcript against the topic's common_misconceptions list (if provided).
+For each one there's evidence about, report its status: "active" if the student
+holds it and it wasn't resolved, "corrected" if they held it but fixed their own view
+during the session, "accepted" if the system tested it directly and the student
+agreed with something false — this last case is the most important to catch
+accurately, since it must be corrected before the session ends, not left silently
+wrong. Leave the array empty if the transcript gives no evidence either way; do not
+guess.
 
 RECITATION DETECTION:
 If the student's explanation reads like a textbook passage (formal tone, perfect technical vocabulary, no hesitation, no simplification, unnaturally complete), flag it as potential recitation.

@@ -92,3 +92,57 @@ export function calculateOverallProgress(
   const mastered = scores.filter((s) => s !== null && s >= masteryThreshold).length;
   return Math.round((mastered / scores.length) * 100);
 }
+
+// ── Two-Axis Band Presentation (V2 T3, re-themed per DESIGN.md's Pip pass) ──
+// AxisBand (understandingBand/explanationBand, from lib/agents/wisdom.ts) is a
+// 4-level scale. Color is now axis-identity (rust=Understanding,
+// bamboo=Explanation), matching the prototype's per-axis fill bars, not a
+// severity tier shared across both axes — see DESIGN.md "Color".
+
+import type { AxisBand } from "@/lib/agents/wisdom";
+
+export type Axis = "understanding" | "explanation";
+
+const AXIS_BAND_LABEL: Record<AxisBand, string> = {
+  secure: "Secure",
+  partial: "Partial",
+  prompt_dependent: "Prompt-dependent",
+  unresolved: "Unresolved",
+};
+
+/** How many of 4 segments fill, adapted from the prototype's native 1-5 dot scale. */
+const AXIS_BAND_SEGMENTS: Record<AxisBand, number> = {
+  unresolved: 1,
+  prompt_dependent: 2,
+  partial: 3,
+  secure: 4,
+};
+
+/** CSS color for an axis band — rust for Understanding, bamboo for Explanation. */
+export function getAxisBandColor(band: AxisBand | null, axis: Axis): string {
+  if (band === null) return "var(--text-tertiary)";
+  return axis === "understanding" ? "var(--accent-primary)" : "var(--accent-secondary)";
+}
+
+/** CSS background tint for an axis band. */
+export function getAxisBandBgColor(band: AxisBand | null, axis: Axis): string {
+  if (band === null) return "transparent";
+  return axis === "understanding" ? "var(--accent-primary-dim)" : "var(--accent-secondary-dim)";
+}
+
+/** The gradient fill for the axis's segmented bar (see .axisFill in page.module.css). */
+export function getAxisBandGradient(axis: Axis): string {
+  return axis === "understanding" ? "var(--axis-understanding)" : "var(--axis-explanation)";
+}
+
+/** How many of 4 segments should render filled. */
+export function getAxisBandSegments(band: AxisBand | null): number {
+  if (band === null) return 0;
+  return AXIS_BAND_SEGMENTS[band];
+}
+
+/** Human-readable label, or "Not yet scored" for a pre-migration session. */
+export function getAxisBandLabel(band: AxisBand | null): string {
+  if (band === null) return "Not yet scored";
+  return AXIS_BAND_LABEL[band];
+}

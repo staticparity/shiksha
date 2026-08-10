@@ -5,6 +5,7 @@ import {
   MasteryResultSchema,
   WISDOM_MODEL,
   WISDOM_TEMPERATURE,
+  AXIS_BANDS,
 } from "./wisdom";
 
 describe("buildWisdomPrompt", () => {
@@ -42,6 +43,27 @@ describe("buildWisdomPrompt", () => {
     expect(lower).toContain("accuracy");
     expect(lower).toContain("depth");
   });
+
+  it("instructs the model to score understanding and explanation independently", () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain("independent");
+    expect(lower).toContain("understandingband");
+    expect(lower).toContain("explanationband");
+  });
+
+  it("includes a fluent-but-wrong example to prevent axis conflation", () => {
+    // The Lamarckian giraffe example is the canonical case from the source PDFs
+    // for a high explanationBand paired with a low understandingBand.
+    expect(prompt.toLowerCase()).toContain("giraffe");
+  });
+
+  it("includes misconception-tracking instructions with the safeguard rule", () => {
+    const lower = prompt.toLowerCase();
+    expect(lower).toContain("misconception");
+    expect(lower).toContain("accepted");
+    // The one-honesty-rule safeguard: an accepted misconception must be corrected.
+    expect(lower).toContain("corrected before the session ends");
+  });
 });
 
 describe("formatTranscript", () => {
@@ -64,51 +86,84 @@ describe("formatTranscript", () => {
 });
 
 describe("MasteryResultSchema", () => {
-  it("validates a correct result", () => {
-    const valid = {
-      masteryScore: 75,
-      strengths: ["Good explanation of equation"],
-      gaps: [
-        {
-          concept: "Calvin Cycle",
-          severity: "moderate",
-          explanation: "Incomplete",
-        },
-      ],
-      overallAssessment: "Proficient understanding overall",
-      recitationDetected: false,
-      followUpQuality: "good",
-    };
+  const validBase = {
+    masteryScore: 75,
+    understandingBand: "secure" as const,
+    explanationBand: "secure" as const,
+    strengths: ["Good explanation of equation"],
+    gaps: [
+      {
+        concept: "Calvin Cycle",
+        severity: "moderate",
+        explanation: "Incomplete",
+      },
+    ],
+    misconceptions: [] as { concept: string; status: "active" | "corrected" | "accepted" }[],
+    overallAssessment: "Proficient understanding overall",
+    recitationDetected: false,
+    followUpQuality: "good",
+  };
 
-    const result = MasteryResultSchema.safeParse(valid);
+  it("validates a correct result", () => {
+    const result = MasteryResultSchema.safeParse(validBase);
     expect(result.success).toBe(true);
   });
 
   it("rejects score out of range", () => {
-    const invalid = {
-      masteryScore: 150,
-      strengths: [],
-      gaps: [],
-      overallAssessment: "Test",
-      recitationDetected: false,
-      followUpQuality: "good",
-    };
-
-    const result = MasteryResultSchema.safeParse(invalid);
+    const result = MasteryResultSchema.safeParse({ ...validBase, masteryScore: 150 });
     expect(result.success).toBe(false);
   });
 
   it("rejects negative score", () => {
-    const invalid = {
-      masteryScore: -10,
-      strengths: [],
-      gaps: [],
-      overallAssessment: "Test",
-      recitationDetected: false,
-      followUpQuality: "good",
-    };
+    const result = MasteryResultSchema.safeParse({ ...validBase, masteryScore: -10 });
+    expect(result.success).toBe(false);
+  });
 
-    const result = MasteryResultSchema.safeParse(invalid);
+  it("accepts every defined axis band for both axes", () => {
+    for (const band of AXIS_BANDS) {
+      const result = MasteryResultSchema.safeParse({
+        ...validBase,
+        understandingBand: band,
+        explanationBand: band,
+      });
+      expect(result.success).toBe(true);
+    }
+  });
+
+  it("rejects an understandingBand value outside the four-band scale", () => {
+    const result = MasteryResultSchema.safeParse({
+      ...validBase,
+      understandingBand: "excellent",
+    });
+    expect(result.success).toBe(false);
+  });
+
+  it("allows understandingBand and explanationBand to diverge", () => {
+    // The Session 2 case from the source PDFs: fluent delivery, wrong content.
+    const result = MasteryResultSchema.safeParse({
+      ...validBase,
+      understandingBand: "unresolved",
+      explanationBand: "secure",
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("accepts a session with multiple misconceptions at different statuses", () => {
+    const result = MasteryResultSchema.safeParse({
+      ...validBase,
+      misconceptions: [
+        { concept: "Lamarckian inheritance", status: "active" },
+        { concept: "Teleological framing", status: "corrected" },
+      ],
+    });
+    expect(result.success).toBe(true);
+  });
+
+  it("rejects an unrecognized misconception status", () => {
+    const result = MasteryResultSchema.safeParse({
+      ...validBase,
+      misconceptions: [{ concept: "Lamarckian inheritance", status: "ignored" }],
+    });
     expect(result.success).toBe(false);
   });
 });
