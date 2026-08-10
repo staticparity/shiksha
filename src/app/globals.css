@@ -3,7 +3,9 @@
    The AI that refuses to teach.
    ============================================================ */
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+/* Per DESIGN.md (Pip direction): Fraunces (voice/display) + Nunito Sans (UI/body)
+   replace v1's Inter and the earlier Cabinet Grotesk/JetBrains Mono pass. */
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Nunito+Sans:wght@600;700;800;900&display=swap');
 
 /* ── CSS Reset ─────────────────────────────────────────────── */
 
@@ -55,54 +57,67 @@ ul, ol {
 /* ── Design Tokens ─────────────────────────────────────────── */
 
 :root {
-  /* Backgrounds */
-  --bg-primary: #0A0A0F;
-  --bg-secondary: #12121A;
-  --bg-tertiary: #1A1A25;
-  --bg-glass: rgba(255, 255, 255, 0.04);
-  --bg-glass-hover: rgba(255, 255, 255, 0.07);
-  --bg-glass-active: rgba(255, 255, 255, 0.10);
+  /* Backgrounds — warm parchment, light-mode-first per DESIGN.md (Pip direction) */
+  --bg-primary: #FBEFD8;
+  --bg-secondary: #FFFCF5;
+  --bg-tertiary: #F3EADB;
+  --bg-glass: rgba(255, 252, 245, 0.7);
+  --bg-glass-hover: rgba(255, 252, 245, 0.85);
+  --bg-glass-active: rgba(255, 252, 245, 0.95);
+  --bg-gradient-hero: radial-gradient(120% 92% at 50% 38%, #FEF8ED 0%, #FBEFD8 34%, #EBD3A8 74%, #D8B884 100%);
 
-  /* Brand Accent */
-  --accent-primary: #33BECC;
-  --accent-primary-dim: rgba(51, 190, 204, 0.15);
-  --accent-secondary: #7C5CFC;
-  --accent-secondary-dim: rgba(124, 92, 252, 0.15);
-  --accent-gradient: linear-gradient(135deg, #33BECC 0%, #7C5CFC 100%);
-  --accent-gradient-subtle: linear-gradient(135deg, rgba(51, 190, 204, 0.2) 0%, rgba(124, 92, 252, 0.2) 100%);
+  /* Brand Accent — rust (Understanding) / bamboo (Explanation), per DESIGN.md */
+  --accent-primary: #C0562A;
+  --accent-primary-deep: #9E4420;
+  --accent-primary-dim: rgba(192, 86, 42, 0.12);
+  --accent-secondary: #6E9A4F;
+  --accent-secondary-deep: #527A38;
+  --accent-secondary-dim: rgba(110, 154, 79, 0.12);
+  --accent-gold: #E5A22B;
+  /* Reserved for the one signature moment (.gradient-text, the landing-page tagline)
+     per TODOS.md "Restrict the signature gradient to one moment, app-wide" — every
+     other decorative use has been flattened to solid --accent-primary. */
+  --accent-gradient: linear-gradient(150deg, var(--accent-primary), var(--accent-primary-deep));
 
-  /* Mastery States */
-  --mastery-expert: #33BECC;
-  --mastery-expert-bg: rgba(51, 190, 204, 0.12);
-  --mastery-proficient: #4ADE80;
-  --mastery-proficient-bg: rgba(74, 222, 128, 0.12);
-  --mastery-developing: #FBBF24;
-  --mastery-developing-bg: rgba(251, 191, 36, 0.12);
-  --mastery-beginning: #F87171;
-  --mastery-beginning-bg: rgba(248, 113, 113, 0.12);
+  /* Axis colors — Understanding (rust→gold) / Explanation (bamboo), for the
+     two-axis fill bars specifically. See mastery-calculator.ts getAxisBandColor. */
+  --axis-understanding: linear-gradient(90deg, var(--accent-primary), var(--accent-gold));
+  --axis-explanation: linear-gradient(90deg, var(--accent-secondary), var(--accent-secondary-deep));
 
-  /* Text */
-  --text-primary: #F1F5F9;
-  --text-secondary: #94A3B8;
-  --text-tertiary: #475569;
-  --text-inverse: #0A0A0F;
+  /* Mastery/severity states (overall mastery_score, gaps) — rust(worst) to bamboo(best) */
+  --mastery-expert: var(--accent-secondary-deep);
+  --mastery-expert-bg: rgba(82, 122, 56, 0.12);
+  --mastery-proficient: var(--accent-secondary);
+  --mastery-proficient-bg: rgba(110, 154, 79, 0.12);
+  --mastery-developing: var(--accent-gold);
+  --mastery-developing-bg: rgba(229, 162, 43, 0.14);
+  --mastery-beginning: var(--accent-primary-deep);
+  --mastery-beginning-bg: rgba(158, 68, 32, 0.12);
 
-  /* Glass */
-  --glass-border: rgba(255, 255, 255, 0.08);
-  --glass-border-hover: rgba(255, 255, 255, 0.14);
-  --glass-blur: 12px;
+  /* Text — warm ink, not neutral gray */
+  --text-primary: #4A3527;
+  --text-secondary: #8A6A44;
+  --text-tertiary: #B39A72;
+  --text-inverse: #FFFCF5;
+
+  /* Glass / borders — warm cream, not cool white */
+  --glass-border: rgba(240, 219, 180, 0.9);
+  --glass-border-hover: rgba(192, 86, 42, 0.5);
+  --glass-blur: 14px;
   --glass-blur-heavy: 24px;
 
-  /* Shadows & Glows */
-  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.3);
-  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.4);
-  --shadow-lg: 0 8px 32px rgba(0, 0, 0, 0.5);
-  --shadow-glow-teal: 0 0 20px rgba(51, 190, 204, 0.15);
-  --shadow-glow-violet: 0 0 20px rgba(124, 92, 252, 0.15);
-  --shadow-glow-teal-strong: 0 0 40px rgba(51, 190, 204, 0.25);
+  /* Shadows — warm brown, not black */
+  --shadow-sm: 0 1px 2px rgba(120, 70, 30, 0.15);
+  --shadow-md: 0 8px 20px -12px rgba(120, 70, 30, 0.5);
+  --shadow-lg: 0 20px 44px -18px rgba(120, 70, 30, 0.55);
+  --shadow-glow-teal: 0 0 20px rgba(192, 86, 42, 0.15);
+  --shadow-glow-violet: 0 0 20px rgba(110, 154, 79, 0.15);
+  --shadow-glow-teal-strong: 0 0 40px rgba(192, 86, 42, 0.25);
 
-  /* Typography */
-  --font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  /* Typography — see DESIGN.md */
+  --font-family: 'Nunito Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  --font-display: 'Fraunces', 'Nunito Sans', serif;
+  --font-mono: 'Nunito Sans', sans-serif; /* no monospace in this system — see DESIGN.md Typography */
 
   --text-xs: 0.75rem;
   --leading-xs: 1rem;
@@ -193,15 +208,12 @@ body {
   font-size: var(--text-base);
   line-height: var(--leading-base);
   color: var(--text-primary);
-  background-color: var(--bg-primary);
-  background-image:
-    radial-gradient(ellipse 80% 60% at 50% -20%, rgba(51, 190, 204, 0.06) 0%, transparent 70%),
-    radial-gradient(ellipse 60% 40% at 80% 100%, rgba(124, 92, 252, 0.04) 0%, transparent 60%);
+  background: var(--bg-gradient-hero);
   background-attachment: fixed;
 }
 
 ::selection {
-  background: rgba(51, 190, 204, 0.30);
+  background: rgba(192, 86, 42, 0.25);
   color: var(--text-primary);
 }
 
