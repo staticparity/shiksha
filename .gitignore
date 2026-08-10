@@ -43,3 +43,6 @@ next-env.d.ts
 .gstack/
 gstack/
 .Rhistory
+e2e/.artifacts/
+playwright-report/
+test-results/

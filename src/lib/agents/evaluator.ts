@@ -17,7 +17,13 @@ import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
-export const EVALUATOR_MODEL = "gpt-5-nano" as const;
+// NOT gpt-5-nano: it's a reasoning model, and this call is awaited before
+// the Learner Agent starts streaming (see api/chat/route.ts) — reasoning
+// overhead there measured ~21s added latency per turn in live testing,
+// which wrecks the chat's responsiveness for a token-cost saving of about
+// $0.001/session. gpt-4.1-nano (non-reasoning, cheap) is a candidate to
+// eval-test later; gpt-4o-mini is the proven-fast baseline for now.
+export const EVALUATOR_MODEL = "gpt-4o-mini" as const;
 export const EVALUATOR_TEMPERATURE = 0.3;
 
 export const EvalResultSchema = z.object({
