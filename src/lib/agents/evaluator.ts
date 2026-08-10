@@ -17,7 +17,7 @@ import { generateObject } from "ai";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 
-export const EVALUATOR_MODEL = "gpt-4o-mini" as const;
+export const EVALUATOR_MODEL = "gpt-5-nano" as const;
 export const EVALUATOR_TEMPERATURE = 0.3;
 
 export const EvalResultSchema = z.object({

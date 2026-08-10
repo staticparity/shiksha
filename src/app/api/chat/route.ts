@@ -19,6 +19,7 @@ import { createClient } from "@/lib/supabase/server";
 import {
   buildLearnerPrompt,
   LEARNER_MAX_TOKENS,
+  LEARNER_MODEL,
   LEARNER_TEMPERATURE,
   MAX_MESSAGES_PER_SESSION,
 } from "@/lib/agents/learner";
@@ -139,7 +140,7 @@ export async function POST(req: Request) {
 
     // ── Step 2: Learner Agent ───────────────────────────────────
     const result = streamText({
-      model: openai("gpt-4o-mini"),
+      model: openai(LEARNER_MODEL),
       system: buildLearnerPrompt(topic.title, topic.subject, evalCritique),
       messages,
       maxOutputTokens: LEARNER_MAX_TOKENS,

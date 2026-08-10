@@ -14,7 +14,7 @@
 
 import { z } from "zod";
 
-export const WISDOM_MODEL = "gpt-4o" as const;
+export const WISDOM_MODEL = "gpt-5" as const;
 export const WISDOM_TEMPERATURE = 0.2;
 
 // ── Mastery Schema ──────────────────────────────────────────

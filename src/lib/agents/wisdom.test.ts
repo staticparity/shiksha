@@ -169,8 +169,8 @@ describe("MasteryResultSchema", () => {
 });
 
 describe("constants", () => {
-  it("uses a capable model", () => {
-    expect(WISDOM_MODEL).toContain("gpt-4");
+  it("uses a capable model, not a mini/nano tier", () => {
+    expect(WISDOM_MODEL).not.toMatch(/mini|nano/);
   });
 
   it("has low temperature for consistent scoring", () => {
