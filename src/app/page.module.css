@@ -10,7 +10,12 @@
   left: 0;
   right: 0;
   z-index: var(--z-sticky);
-  background: rgba(10, 10, 15, 0.8);
+  /* Was rgba(10, 10, 15, 0.8) — a near-black dark-theme-era value never
+     migrated when the design flipped to the light parchment palette,
+     leaving dark ink-colored nav text (e.g. "Log in") at very low
+     contrast against it. --bg-glass matches the same warm-glass treatment
+     StudentHeader already uses. */
+  background: var(--bg-glass);
   backdrop-filter: blur(var(--glass-blur-heavy));
   border-bottom: 1px solid var(--glass-border);
 }
