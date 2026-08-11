@@ -58,18 +58,18 @@ export function PipAvatar({ message, mood = "curious", isTyping = false, size = 
 
   return (
     <div className={styles.stack}>
+      <div key={bubbleKey} className={styles.bubble}>
+        {isTyping ? (
+          <span className={styles.typing} aria-label="Pip is thinking">
+            <i /><i /><i />
+          </span>
+        ) : (
+          message
+        )}
+      </div>
+
       <div className={styles.wrap} style={{ width: size, height: size }}>
         <div className={styles.aura} data-mood={effectiveMood} />
-
-        <div key={bubbleKey} className={styles.bubble}>
-          {isTyping ? (
-            <span className={styles.typing} aria-label="Pip is thinking">
-              <i /><i /><i />
-            </span>
-          ) : (
-            message
-          )}
-        </div>
 
         <div className={styles.pipArt}>
           <div className={styles.disc} />

@@ -63,11 +63,10 @@
   min-height: 0;
   position: relative;
   display: flex;
-  /* flex-end, not center: Pip's speech bubble floats above the character
-     (position: absolute; bottom: 100%) and needs headroom to grow into
-     for longer messages. Anchoring low leaves that room instead of the
-     bubble crowding the sticky header above. */
-  align-items: flex-end;
+  /* The bubble is normal flow now (see pip-avatar.module.css), not
+     absolutely positioned above the character, so simple centering is
+     correct — no special anchoring needed to reserve headroom. */
+  align-items: center;
   justify-content: center;
   /* auto, not hidden: AmbientLeaves already self-clips via its own .field
      wrapper, so this isn't needed to contain the leaves. It's needed

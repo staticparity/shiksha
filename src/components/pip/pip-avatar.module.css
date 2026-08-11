@@ -73,13 +73,28 @@
 }
 
 .bubble {
-  position: absolute;
-  left: 50%;
-  bottom: 100%;
-  transform: translateX(-50%);
-  margin-bottom: var(--space-4);
+  /* Normal flow, not position:absolute — it used to float above the
+     character via bottom:100%, breaking out of .wrap's box entirely. Its
+     on-screen position then depended on how much headroom happened to
+     exist above wherever the character was anchored, and for long
+     messages it could render with a negative viewport Y — literally above
+     the browser window, unreachable by any scroll (not an overflow
+     problem, an off-screen-entirely problem). As a normal-flow sibling
+     before .wrap in .stack, it just takes the space it needs; .stage's
+     own overflow-y:auto scrolls the whole stack normally if it doesn't
+     fit, with ordinary top-anchored semantics. position:relative here is
+     only for the ::before/::after pointer triangle below. */
+  position: relative;
+  /* .stack's gap (20px) is wider than the pointer triangle (13px), which
+     left visible daylight between the arrow tip and the avatar instead of
+     touching it. Pull the bubble closer so the pointer actually reaches. */
+  margin-bottom: -8px;
   max-width: min(80vw, 380px);
   min-width: 160px;
+  /* Self-capped height with its own scroll: a single very long reply
+     shouldn't push Pip's avatar far down/off the visible stage. */
+  max-height: 45vh;
+  overflow-y: auto;
   background: var(--bg-secondary);
   border: 2px solid var(--glass-border);
   border-radius: var(--radius-xl);
