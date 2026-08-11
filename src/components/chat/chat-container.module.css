@@ -1,7 +1,13 @@
 .container {
   display: flex;
   flex-direction: column;
-  height: 100vh;
+  /* Not 100vh — this renders inside (student)/layout.tsx's <main>, below
+     the site's own sticky StudentHeader (var(--header-height)). 100vh here
+     double-counts that header's height, making the whole page ~1
+     header-height taller than the viewport and forcing an unwanted
+     page-level scroll instead of this container's own fixed app-shell
+     layout (header/stage/input) doing the sizing. */
+  height: calc(100vh - var(--header-height));
   max-width: var(--chat-max-width);
   margin: 0 auto;
   position: relative;
@@ -50,6 +56,11 @@
 
 .stage {
   flex: 1;
+  /* Flex items default to min-height:auto, which lets them grow past their
+     flex-allocated space to fit content instead of scrolling — the classic
+     flexbox overflow gotcha. Without this, overflow-y:auto above is a
+     no-op and the whole page scrolls instead of just this area. */
+  min-height: 0;
   position: relative;
   display: flex;
   /* flex-end, not center: Pip's speech bubble floats above the character
@@ -58,10 +69,15 @@
      bubble crowding the sticky header above. */
   align-items: flex-end;
   justify-content: center;
-  /* Not overflow:hidden — AmbientLeaves already self-clips via its own
-     .field wrapper. This stage also hosts Pip's speech bubble, which
-     deliberately floats above the character (position: absolute; bottom:
-     100%) and must not be clipped when the message runs more than ~2 lines. */
+  /* auto, not hidden: AmbientLeaves already self-clips via its own .field
+     wrapper, so this isn't needed to contain the leaves. It's needed
+     because the bubble + signals row together can exceed the space this
+     flex:1 area actually has (e.g. a long reply once the signals row is
+     showing) — auto lets the stage itself scroll to reveal the overflow
+     instead of clipping it (bad) or pushing the whole page into a scroll
+     that breaks the sticky header's positioning (also bad). Invisible
+     when content fits, which is the common case. */
+  overflow-y: auto;
   padding: var(--space-6) var(--space-5);
 }
 

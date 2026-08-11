@@ -1,4 +1,11 @@
 .header {
+  /* Matches --header-height so pages below (e.g. the chat page's
+     height:calc(100vh - var(--header-height))) can size against a known,
+     consistent value instead of this header's incidental padding-derived
+     height. */
+  min-height: var(--header-height);
+  display: flex;
+  align-items: center;
   position: sticky;
   top: 0;
   z-index: 100;
