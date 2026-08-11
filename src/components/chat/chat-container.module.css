@@ -52,7 +52,11 @@
   flex: 1;
   position: relative;
   display: flex;
-  align-items: center;
+  /* flex-end, not center: Pip's speech bubble floats above the character
+     (position: absolute; bottom: 100%) and needs headroom to grow into
+     for longer messages. Anchoring low leaves that room instead of the
+     bubble crowding the sticky header above. */
+  align-items: flex-end;
   justify-content: center;
   /* Not overflow:hidden — AmbientLeaves already self-clips via its own
      .field wrapper. This stage also hosts Pip's speech bubble, which
