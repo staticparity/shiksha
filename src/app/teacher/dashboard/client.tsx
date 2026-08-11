@@ -130,9 +130,7 @@ export function TeacherDashboardClient({
                     <th className={styles.heatmapHeader}>Student</th>
                     {data.topics.map((topic) => (
                       <th key={topic.id} className={styles.heatmapHeader}>
-                        {topic.title.length > 12
-                          ? topic.title.substring(0, 12) + "..."
-                          : topic.title}
+                        {topic.title}
                       </th>
                     ))}
                   </tr>
