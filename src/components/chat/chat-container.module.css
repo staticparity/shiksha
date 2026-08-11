@@ -54,7 +54,10 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  overflow: hidden;
+  /* Not overflow:hidden — AmbientLeaves already self-clips via its own
+     .field wrapper. This stage also hosts Pip's speech bubble, which
+     deliberately floats above the character (position: absolute; bottom:
+     100%) and must not be clipped when the message runs more than ~2 lines. */
   padding: var(--space-6) var(--space-5);
 }
 
