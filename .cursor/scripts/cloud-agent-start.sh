@@ -25,8 +25,34 @@ start_local_supabase() {
   if curl -sf http://127.0.0.1:54321/auth/v1/health >/dev/null 2>&1; then
     echo "Local Supabase already running."
   else
-    ./node_modules/.bin/supabase start --network-id local-network
+    local attempt=1
+    local max_attempts=3
+    while (( attempt <= max_attempts )); do
+      echo "Starting local Supabase (attempt ${attempt}/${max_attempts})..."
+      if ./node_modules/.bin/supabase start --network-id local-network; then
+        break
+      fi
+      echo "supabase start failed; stopping and retrying..." >&2
+      ./node_modules/.bin/supabase stop --no-backup >/dev/null 2>&1 || true
+      sleep $((attempt * 5))
+      ((attempt++)) || true
+    done
+    if (( attempt > max_attempts )); then
+      echo "Failed to start local Supabase after ${max_attempts} attempts." >&2
+      exit 1
+    fi
   fi
+
+  # Wait until Auth is ready (covers race after start returns).
+  local i=0
+  until curl -sf http://127.0.0.1:54321/auth/v1/health >/dev/null 2>&1; do
+    ((i++)) || true
+    if (( i > 60 )); then
+      echo "Timed out waiting for local Supabase Auth health." >&2
+      exit 1
+    fi
+    sleep 2
+  done
 
   # Standard local demo keys from `supabase start`
   local url="http://127.0.0.1:54321"
