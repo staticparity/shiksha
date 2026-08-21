@@ -6,14 +6,29 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Cloud Agent development
 
-Required environment secrets: `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `OPENAI_API_KEY`. The start script writes these to `.env.local` on boot.
+### Secrets (optional if using local Supabase)
 
-The Supabase project must have migrations in `supabase/migrations/` applied and `supabase/seed.sql` loaded for E2E demo accounts (`rohan@greenfield.edu` / `ananya@greenfield.edu`, password `password123`).
+| Secret | Required when |
+| --- | --- |
+| `NEXT_PUBLIC_SUPABASE_URL` | Using a hosted Supabase project |
+| `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Using a hosted Supabase project |
+| `OPENAI_API_KEY` | Always required for chat / mastery scoring |
+
+If Supabase secrets are absent, the start script boots **local Supabase** via Docker (`supabase start`) and writes demo keys to `.env.local`.
+
+Local demo accounts (password `password123`):
+- Teacher: `ananya@greenfield.edu`
+- Student: `rohan@greenfield.edu`
+
+### Commands
 
 | Task | Command |
 | --- | --- |
 | Unit tests | `pnpm test` |
 | Production build | `pnpm build` |
-| Dev server | `pnpm dev` (also started automatically via environment terminals) |
+| Dev server | `pnpm dev` (also started via environment terminals) |
 | E2E tests | `pnpm test:e2e` |
 | Lint | `pnpm lint` |
+| Local Supabase | `pnpm exec supabase start --network-id local-network` |
+
+Docker in this VM needs legacy iptables and a `local-network` bridge bound to `127.0.0.1` for nested containers.

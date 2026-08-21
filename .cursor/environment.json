@@ -7,6 +7,14 @@
     {
       "name": "Next.js dev server",
       "port": 3000
+    },
+    {
+      "name": "Local Supabase API",
+      "port": 54321
+    },
+    {
+      "name": "Local Supabase Studio",
+      "port": 54323
     }
   ],
   "terminals": [
