@@ -1,0 +1,27 @@
+{
+  "name": "Shiksha",
+  "user": "ubuntu",
+  "install": "./.cursor/scripts/cloud-agent-install.sh",
+  "start": "./.cursor/scripts/cloud-agent-start.sh",
+  "ports": [
+    {
+      "name": "Next.js dev server",
+      "port": 3000
+    },
+    {
+      "name": "Local Supabase API",
+      "port": 54321
+    },
+    {
+      "name": "Local Supabase Studio",
+      "port": 54323
+    }
+  ],
+  "terminals": [
+    {
+      "name": "dev-server",
+      "command": "pnpm dev",
+      "description": "Next.js 16 development server with Turbopack on port 3000"
+    }
+  ]
+}

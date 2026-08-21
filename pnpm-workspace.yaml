@@ -1,3 +1,4 @@
-ignoredBuiltDependencies:
-  - sharp
-  - unrs-resolver
+allowBuilds:
+  sharp: true
+  supabase: true
+  unrs-resolver: true

@@ -3,29 +3,43 @@
 -- ============================================================
 -- Demo school, teacher, students, class, topics, and sample sessions.
 -- Run after applying 001_initial_schema.sql and 002_rls_policies.sql.
+-- Compatible with the on_auth_user_created trigger: insert school first,
+-- seed auth users as students (trigger joins by domain), then promote
+-- the teacher and rely on ON CONFLICT for profiles/memberships.
 -- ============================================================
+
+-- ── School (before auth users so domain match works) ────────
+INSERT INTO schools (id, name, domain, plan, settings) VALUES
+  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
+   'Greenfield Academy',
+   'greenfield.edu',
+   'active',
+   '{"max_students": 200, "max_classes": 20}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
 
 -- ── Auth Users (must exist before profiles) ─────────────────
 -- Password for all demo accounts: password123
+-- role=student in metadata so the signup trigger joins the school above
+-- instead of creating a duplicate greenfield.edu school for the teacher.
 INSERT INTO auth.users (id, instance_id, aud, role, email, encrypted_password, email_confirmed_at, raw_app_meta_data, raw_user_meta_data, created_at, updated_at, confirmation_token, email_change, email_change_token_new, recovery_token) VALUES
   ('11111111-1111-1111-1111-111111111111', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'ananya@greenfield.edu',
-   '$2a$10$LCJ7li2LyxD5183juOzgAuB6xj5sbxo8CEBn8xX6YnNYANqvM4KOq',
-   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Ananya Sharma"}', NOW(), NOW(), '', '', '', ''),
+   '$2a$10$wz01ZHOTB1i61i8qZ6bg5u/jmt4dVPhdcsdSeP/dFjJonb871bFSe',
+   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Ananya Sharma","role":"student"}', NOW(), NOW(), '', '', '', ''),
   ('22222222-2222-2222-2222-222222222222', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'rohan@greenfield.edu',
-   '$2a$10$LCJ7li2LyxD5183juOzgAuB6xj5sbxo8CEBn8xX6YnNYANqvM4KOq',
-   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Rohan Mehta"}', NOW(), NOW(), '', '', '', ''),
+   '$2a$10$wz01ZHOTB1i61i8qZ6bg5u/jmt4dVPhdcsdSeP/dFjJonb871bFSe',
+   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Rohan Mehta","role":"student"}', NOW(), NOW(), '', '', '', ''),
   ('33333333-3333-3333-3333-333333333333', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'priya@greenfield.edu',
-   '$2a$10$LCJ7li2LyxD5183juOzgAuB6xj5sbxo8CEBn8xX6YnNYANqvM4KOq',
-   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Priya Gupta"}', NOW(), NOW(), '', '', '', ''),
+   '$2a$10$wz01ZHOTB1i61i8qZ6bg5u/jmt4dVPhdcsdSeP/dFjJonb871bFSe',
+   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Priya Gupta","role":"student"}', NOW(), NOW(), '', '', '', ''),
   ('44444444-4444-4444-4444-444444444444', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'arjun@greenfield.edu',
-   '$2a$10$LCJ7li2LyxD5183juOzgAuB6xj5sbxo8CEBn8xX6YnNYANqvM4KOq',
-   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Arjun Singh"}', NOW(), NOW(), '', '', '', ''),
+   '$2a$10$wz01ZHOTB1i61i8qZ6bg5u/jmt4dVPhdcsdSeP/dFjJonb871bFSe',
+   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Arjun Singh","role":"student"}', NOW(), NOW(), '', '', '', ''),
   ('55555555-5555-5555-5555-555555555555', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'diya@greenfield.edu',
-   '$2a$10$LCJ7li2LyxD5183juOzgAuB6xj5sbxo8CEBn8xX6YnNYANqvM4KOq',
-   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Diya Patel"}', NOW(), NOW(), '', '', '', ''),
+   '$2a$10$wz01ZHOTB1i61i8qZ6bg5u/jmt4dVPhdcsdSeP/dFjJonb871bFSe',
+   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Diya Patel","role":"student"}', NOW(), NOW(), '', '', '', ''),
   ('66666666-6666-6666-6666-666666666666', '00000000-0000-0000-0000-000000000000', 'authenticated', 'authenticated', 'kabir@greenfield.edu',
-   '$2a$10$LCJ7li2LyxD5183juOzgAuB6xj5sbxo8CEBn8xX6YnNYANqvM4KOq',
-   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Kabir Verma"}', NOW(), NOW(), '', '', '', '')
+   '$2a$10$wz01ZHOTB1i61i8qZ6bg5u/jmt4dVPhdcsdSeP/dFjJonb871bFSe',
+   NOW(), '{"provider":"email","providers":["email"]}', '{"full_name":"Kabir Verma","role":"student"}', NOW(), NOW(), '', '', '', '')
 ON CONFLICT (id) DO NOTHING;
 
 -- Also insert into auth.identities (required for email login to work)
@@ -44,16 +58,13 @@ INSERT INTO auth.identities (id, user_id, provider_id, identity_data, provider, 
    '{"sub":"66666666-6666-6666-6666-666666666666","email":"kabir@greenfield.edu"}', 'email', NOW(), NOW(), NOW())
 ON CONFLICT (provider_id, provider) DO NOTHING;
 
--- ── School ──────────────────────────────────────────────────
-INSERT INTO schools (id, name, domain, plan, settings) VALUES
-  ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa',
-   'Greenfield Academy',
-   'greenfield.edu',
-   'active',
-   '{"max_students": 200, "max_classes": 20}'::jsonb)
-ON CONFLICT (id) DO NOTHING;
+-- Promote Ananya to teacher (trigger enrolled everyone as student)
+UPDATE school_members
+SET role = 'teacher'
+WHERE user_id = '11111111-1111-1111-1111-111111111111'
+  AND school_id = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa';
 
--- ── Profiles ────────────────────────────────────────────────
+-- ── Profiles (trigger already created these; keep for idempotency) ─
 INSERT INTO profiles (id, full_name, avatar_url) VALUES
   ('11111111-1111-1111-1111-111111111111', 'Ananya Sharma', NULL),
   ('22222222-2222-2222-2222-222222222222', 'Rohan Mehta', NULL),
@@ -63,7 +74,7 @@ INSERT INTO profiles (id, full_name, avatar_url) VALUES
   ('66666666-6666-6666-6666-666666666666', 'Kabir Verma', NULL)
 ON CONFLICT (id) DO NOTHING;
 
--- ── School Members ──────────────────────────────────────────
+-- ── School Members (trigger already created these) ──────────
 INSERT INTO school_members (school_id, user_id, role) VALUES
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '11111111-1111-1111-1111-111111111111', 'teacher'),
   ('aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', '22222222-2222-2222-2222-222222222222', 'student'),
@@ -350,3 +361,5 @@ INSERT INTO mastery_credits (student_id, session_id, school_id, credits_earned) 
   ('55555555-5555-5555-5555-555555555555', 'dddddddd-dddd-dddd-dddd-dddddddddd10', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 2),
   ('55555555-5555-5555-5555-555555555555', 'dddddddd-dddd-dddd-dddd-dddddddddd11', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 3),
   ('55555555-5555-5555-5555-555555555555', 'dddddddd-dddd-dddd-dddd-dddddddddd12', 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa', 1);
+
+
