@@ -38,9 +38,9 @@ export default function LandingPage() {
             powered by dual-agent AI.
           </p>
           <div className={styles.heroCtas}>
-            <Link href="/signup">
+            <Link href="/demo">
               <Button variant="primary" size="lg">
-                Start Teaching AI
+                Try the demo
               </Button>
             </Link>
             <Link href="#how-it-works">

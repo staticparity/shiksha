@@ -6,6 +6,15 @@ This version has breaking changes — APIs, conventions, and file structure may 
 
 ## Cloud Agent development
 
+### Product demo
+
+Open `/demo` for the product test ground (also linked as **Try the demo** on the landing page).
+
+| Role | Email | Password |
+| --- | --- | --- |
+| Student | `rohan@greenfield.edu` | `password123` |
+| Teacher | `ananya@greenfield.edu` | `password123` |
+
 ### Secrets (optional if using local Supabase)
 
 | Secret | Required when |
