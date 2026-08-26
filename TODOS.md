@@ -5,6 +5,178 @@ condition for when to act on it.
 
 ---
 
+## Eng: PDF upload for AI-generated topic content
+
+**What:** Support real PDF file upload (basic text extraction, not OCR) for
+the "Generate from content" feature, in addition to plain-text paste.
+
+**Why:** Surfaced during `/plan-eng-review` (2026-08-25) for
+`docs/designs/ai-content-generation-from-uploads.md`. The tutor's actual
+material is "a mix of own notes and textbook/PDF excerpts" — v1 ships
+paste-only since copying text out of a PDF is low-friction compared to the
+actual pain point (typing structured concept rows by hand), but the PDF
+half of that mix is still a real, if smaller, friction point.
+
+**Pros:** Closes the loop for the PDF half of the stated material mix;
+removes a real (if small) manual step.
+
+**Cons:** New dependency (a PDF-to-text library), new file-upload UI,
+server-side extraction step — moves effort from S/M toward M.
+
+**Context:** Deliberately deferred, not ruled out, to keep the v1 feature's
+effort proportional to the actual stated pain (manual typing, not file
+format). Distinct from the OCR/document-parsing pipeline that was correctly
+ruled out entirely (see the design doc's landscape check) — this is just
+basic text extraction from a well-formed PDF, a much smaller ask.
+
+**Depends on / blocked by:** Real signal from the tutor's actual use of the
+paste-only v1 — whether PDF copy-paste turns out to be an actual complaint
+or a non-issue in practice.
+
+**Trigger:** If the tutor reports PDF copy-paste as a real friction point
+after using the paste-only version for real topics.
+
+---
+
+## Eng: No-email identity path for students without independent access
+
+**What:** Design and build a way for a student without their own email (younger
+students especially) to have a Shiksha identity — PIN/code-based login, or
+similar — instead of requiring every student to have a distinct email address.
+
+**Why:** The target user for the tutor-enrollment fix (see
+`docs/designs/tutoring-class-enrollment.md`) explicitly includes "younger
+students who may not have independent email access" (Premise 2) — but the
+shipped mechanism still requires one distinct email per student. Surfaced by
+an outside-voice cross-model review during `/plan-ceo-review` (2026-08-25):
+the design doc already flagged this as an unresolved Open Question, not a
+silently-missed gap, but it's still genuinely unresolved.
+
+**Pros:** Actually serves the demographic the feature was framed around;
+closes a real gap between stated target user and shipped mechanism.
+
+**Cons:** A real identity-model rethink (not a small patch) — touches auth,
+not just the enrollment form. Real risk of scope creep if picked up before
+there's a confirmed need.
+
+**Context:** The *dangerous* half of this gap (two students silently sharing
+one identity if they share an email) is already fixed — `enrollStudent()` now
+detects a name mismatch on an existing account and makes the tutor confirm
+before proceeding, rather than silently merging. What's left unsolved is
+narrower: a student with literally no email at all still has no path onto
+the platform. Distinct from the TODO below it (email-invite vs.
+tutor-set-password) — that one is about *mechanism* for students who DO have
+an email; this one is about students who don't have one at all.
+
+**Depends on / blocked by:** Real signal from this week's pilot on whether
+the actual tutoring class has students in this situation.
+
+**Trigger:** If the pilot tutor reports a student who genuinely has no email
+to give.
+
+---
+
+## Eng: Force password change on first login for tutor-set-password accounts
+
+**What:** When a tutor sets a student's initial password directly (see
+`docs/designs/tutoring-class-enrollment.md`), force the student to change it
+on their first login instead of leaving it optional indefinitely.
+
+**Why:** Surfaced by an outside-voice cross-model review during
+`/plan-ceo-review` (2026-08-25): today the tutor is a permanent password
+custodian for what's often a minor's account — "they can change it
+afterward" is optional, never enforced.
+
+**Pros:** Meaningfully better data-handling posture for what's frequently a
+minor's account; cheap once someone's already in this code.
+
+**Cons:** Adds a forced first-login step — slightly more friction than
+today's silent pass-through.
+
+**Context:** Same area of the code as the email-invite-vs-tutor-set-password
+TODO below — worth picking up together rather than as two separate passes
+through the same enrollment flow.
+
+**Depends on / blocked by:** Nothing — can happen independently.
+
+**Trigger:** Next time the tutor-set-password mechanism gets revisited.
+
+---
+
+## Eng: Route-wide logging + fix plain-text 401/403 in chat/route.ts and topics/route.ts
+
+**What:** Add structured logging to `create_class`, `create_topic`, and
+`get_classes` in `src/app/api/teacher/route.ts` (only `add_student` got
+logging in this pass). Also fix `chat/route.ts` and `topics/route.ts`, which
+have the same `new Response("Unauthorized", { status: 401 })` plain-text bug
+that `teacher/route.ts` had — a session-expiry mid-action crashes the
+client's `res.json()` call and freezes the UI silently.
+
+**Why:** Surfaced during `/plan-ceo-review` (2026-08-25) Sections 4 and 8
+while fixing the identical issues in `teacher/route.ts`. Same root cause,
+different files, not touched by this PR since they're unrelated to the
+enrollment-friction feature.
+
+**Pros:** Consistent debuggability across the whole API surface; no more
+silently-frozen buttons anywhere in the app on session expiry.
+
+**Cons:** Touches files with no other reason to change in this PR.
+
+**Context:** The fix pattern is already proven — `Response.json({error},
+{status})` instead of `new Response(text, {status})`, plus `console.error`
+at real failure branches. Purely mechanical to replicate.
+
+**Depends on / blocked by:** Nothing — can happen independently, any time.
+
+**Trigger:** Next dedicated cross-cutting pass, or the next time either file
+is touched for another reason.
+
+---
+
+## Eng: Let a tutor choose email-invite vs. tutor-set-password per student
+
+**What:** The tutor-enrollment flow (see `docs/designs/tutoring-class-enrollment.md`)
+defaults every new student to a tutor-set password (told to the student directly),
+not Supabase's email-invite flow. Add the option to choose either per student.
+
+**Why:** Surfaced by the outside-voice cross-model review during `/plan-eng-review`
+(2026-08-25): tutor-set-password was picked because it avoids relying on a young
+student checking email before their first login. But some tutors or students may
+genuinely prefer email self-setup — no way to know without the real-world test.
+
+**Context:** Deferred rather than built now specifically to keep this week's change
+narrow. Revisit once the real tutoring class (see design doc's Assignment) has
+actually used the tutor-set-password flow and there's a real signal either way.
+
+**Depends on / blocked by:** Real usage signal from the enrollment-friction fix's
+first test.
+
+**Trigger:** After the real tutor test, if password-relay turns out to be its own
+friction point (e.g. tutor forgets what they set, or a student loses it).
+
+---
+
+## Eng: Test coverage for the rest of /api/teacher
+
+**What:** `create_class`, `create_topic`, and `get_classes` actions in
+`src/app/api/teacher/route.ts` have zero test coverage. Only `add_student` (the
+action modified by the tutor-enrollment work) gets tests committed as part of that
+change.
+
+**Why:** Surfaced during `/plan-eng-review` (2026-08-25) while scoping test coverage
+for the `add_student` change — the gap in the other three actions pre-dates this
+work and isn't a regression, but it's the same file getting more attention now.
+
+**Context:** Deliberately not bundled into the tutor-enrollment PR — closing it
+would expand that change well beyond the narrow wedge the design doc committed to.
+
+**Depends on / blocked by:** Nothing — can happen independently, any time.
+
+**Trigger:** Next dedicated test-coverage pass, or the next time any action in this
+route file is touched for another reason.
+
+---
+
 ## V2: Remediation pathway for diagnosed gaps
 
 **What:** Design a repair-content pathway for what happens after a gap is diagnosed —

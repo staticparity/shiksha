@@ -4,11 +4,13 @@ import { test, expect, type Browser, type Page } from "@playwright/test";
  * Full Pipeline E2E
  *
  * The only test in this repo that exercises the real dual-agent pipeline
- * end to end — signup, class/topic setup, enrollment, a real teach-back
- * conversation (Learner + Evaluator + live signals checklist), Finish &
- * Score (Wisdom Agent), and the two-axis results screen. Everything else
- * in e2e/ tests static pages or relies on seed data; this one makes real
- * OpenAI calls and writes real rows.
+ * end to end — signup, class/topic setup, enrollment (both the existing
+ * self-signup path AND a tutor creating a brand-new account directly with
+ * an explicit school assignment), a real teach-back conversation (Learner +
+ * Evaluator + live signals checklist), Finish & Score (Wisdom Agent), and
+ * the two-axis results screen. Everything else in e2e/ tests static pages
+ * or relies on seed data; this one makes real OpenAI calls and writes real
+ * rows.
  *
  * Uses a fresh, timestamped school domain each run so it's safe to re-run
  * against the same Supabase project without colliding with prior runs.
@@ -28,6 +30,13 @@ const TEACHER_EMAIL = `teacher@${DOMAIN}`;
 const STUDENT_EMAIL = `student@${DOMAIN}`;
 const PASSWORD = "password123!";
 
+// A student the teacher creates directly (never self-signs-up) — a
+// different email domain on purpose, so handle_new_user()'s email-domain
+// matching would NOT find the teacher's school if the explicit-schoolId
+// fix were broken. That's the actual thing this path needs to prove.
+const NEW_STUDENT_EMAIL = `newstudent-${RUN_ID}@e2e-other-domain.com`;
+const NEW_STUDENT_PASSWORD = "tutor-set-pw-1";
+
 async function signup(page: Page, name: string, email: string, role: "student" | "teacher") {
   await page.goto("/signup");
   await page.locator("#fullName").fill(name);
@@ -40,11 +49,21 @@ async function signup(page: Page, name: string, email: string, role: "student" |
   });
 }
 
+async function login(page: Page, email: string, password: string) {
+  await page.goto("/login");
+  await page.locator("#email").fill(email);
+  await page.locator("#password").fill(password);
+  await page.getByRole("button", { name: "Sign In" }).click();
+  await page.waitForURL("**/dashboard", { timeout: 15000 });
+}
+
 test.describe.serial("Full pipeline: signup -> teach-back -> two-axis score", () => {
+  let sharedBrowser: Browser;
   let teacherPage: Page;
   let studentPage: Page;
 
   test.beforeAll(async ({ browser }: { browser: Browser }) => {
+    sharedBrowser = browser;
     teacherPage = await (await browser.newContext()).newPage();
     studentPage = await (await browser.newContext()).newPage();
   });
@@ -79,12 +98,51 @@ test.describe.serial("Full pipeline: signup -> teach-back -> two-axis score", ()
     await signup(studentPage, "E2E Student", STUDENT_EMAIL, "student");
   });
 
-  test("teacher enrolls the student in the class", async () => {
+  test("teacher enrolls the already-self-signed-up student (existing account path still works)", async () => {
     await teacherPage.getByRole("button", { name: /Invite Students/ }).click();
     await expect(teacherPage.getByText("Invite a Student")).toBeVisible({ timeout: 10000 });
+    await teacherPage.getByPlaceholder("e.g. Priya Sharma").fill("E2E Student");
     await teacherPage.getByPlaceholder("student@gmail.com").fill(STUDENT_EMAIL);
+    // Required client-side even though it's ignored server-side for an
+    // existing account — the tutor can't know in advance which case this is.
+    await teacherPage.getByPlaceholder("e.g. sunshine42").fill("unused-value-1");
     await teacherPage.getByRole("button", { name: "Enroll Student" }).click();
     await expect(teacherPage.getByText(/enrolled!/)).toBeVisible({ timeout: 10000 });
+  });
+
+  test("teacher creates a brand-new student account directly, no prior self-signup", async () => {
+    // The Critical Path from the eng review: proves handle_new_user() still
+    // fires correctly for admin-created users, and that the explicit
+    // schoolId metadata assigns the RIGHT school (not the LIMIT-1 fallback
+    // across all schools that domain-matching would hit here, since
+    // NEW_STUDENT_EMAIL's domain has nothing to do with the teacher's school).
+    await teacherPage.getByPlaceholder("e.g. Priya Sharma").fill("E2E New Student");
+    await teacherPage.getByPlaceholder("student@gmail.com").fill(NEW_STUDENT_EMAIL);
+    await teacherPage.getByPlaceholder("e.g. sunshine42").fill(NEW_STUDENT_PASSWORD);
+    await teacherPage.getByRole("button", { name: "Enroll Student" }).click();
+
+    // Distinct success state for a newly-created account (Pass 2 of the
+    // design review) — persistent card, not the 4s toast, shows the
+    // password back so the tutor can relay it.
+    await expect(teacherPage.getByText(/account is ready/)).toBeVisible({ timeout: 10000 });
+    await expect(teacherPage.getByText(NEW_STUDENT_PASSWORD)).toBeVisible();
+    await teacherPage.getByRole("button", { name: "Got it" }).click();
+  });
+
+  test("the tutor-created student can log in with the tutor-set password and sees the assigned topic", async () => {
+    const newStudentPage = await (await sharedBrowser.newContext()).newPage();
+    await login(newStudentPage, NEW_STUDENT_EMAIL, NEW_STUDENT_PASSWORD);
+
+    // If handle_new_user() had fallen back to domain-matching (or the
+    // LIMIT-1/"Default School" fallback) instead of using the explicit
+    // schoolId, this student would land in the wrong school and NOT see
+    // the teacher's class/topic here.
+    await expect(newStudentPage.getByText("Assigned Topics")).toBeVisible({ timeout: 10000 });
+    await expect(newStudentPage.getByText("Photosynthesis", { exact: true })).toBeVisible({
+      timeout: 10000,
+    });
+
+    await newStudentPage.context().close();
   });
 
   test("student sees the assigned topic and starts teaching Pip", async () => {

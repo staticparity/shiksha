@@ -30,7 +30,11 @@ export default function TeacherSetupPage() {
 
   // Student form
   const [studentClassId, setStudentClassId] = useState("");
+  const [studentName, setStudentName] = useState("");
   const [studentEmail, setStudentEmail] = useState("");
+  const [studentPassword, setStudentPassword] = useState("");
+  const [newAccountInfo, setNewAccountInfo] = useState<{ name: string; password: string } | null>(null);
+  const [confirmMismatch, setConfirmMismatch] = useState<{ existingName: string } | null>(null);
 
   useEffect(() => {
     loadClasses();
@@ -120,25 +124,53 @@ export default function TeacherSetupPage() {
 
   const handleAddStudent = async (e: React.FormEvent) => {
     e.preventDefault();
+    await submitAddStudent(false);
+  };
+
+  const submitAddStudent = async (confirmed: boolean) => {
     setLoading(true);
+    setNewAccountInfo(null);
     const res = await fetch("/api/teacher", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         action: "add_student",
         classId: studentClassId,
+        studentName,
         studentEmail,
+        studentPassword,
+        confirmed,
       }),
     });
     const data = await res.json();
     setLoading(false);
 
     if (res.ok) {
-      showMessage("success", `${data.studentName} enrolled!`);
+      setConfirmMismatch(null);
+      if (data.created) {
+        // Persistent, not a timed toast — the tutor needs to read this back
+        // and relay the password, which the password field itself no longer
+        // holds once it's cleared below.
+        setNewAccountInfo({ name: data.studentName, password: studentPassword });
+      } else {
+        showMessage("success", `${data.studentName} enrolled!`);
+      }
+      setStudentName("");
       setStudentEmail("");
+      setStudentPassword("");
+    } else if (data.needsConfirmation) {
+      // Name on file for this email doesn't match what was just typed — could
+      // be two different people sharing one email (e.g. siblings). Don't
+      // silently merge; make the tutor confirm it's really the same student.
+      setConfirmMismatch({ existingName: data.existingStudentName });
     } else {
+      setConfirmMismatch(null);
       showMessage("error", data.error || "Failed to add student");
     }
+  };
+
+  const handleConfirmMismatch = () => {
+    submitAddStudent(true);
   };
 
   const addConcept = () => {
@@ -342,11 +374,52 @@ export default function TeacherSetupPage() {
         {/* ── Step 3: Invite Student ──────────────────────────── */}
         {activeTab === "student" && (
           <GlassCard>
+            {newAccountInfo && (
+              <div className={styles.newAccountCard}>
+                <div className={styles.newAccountHeader}>
+                  <span>🎉</span>
+                  <strong>{newAccountInfo.name}&apos;s account is ready</strong>
+                </div>
+                <p className={styles.newAccountHint}>
+                  Give them this password to log in — they can change it afterward.
+                </p>
+                <div className={styles.newAccountPassword}>{newAccountInfo.password}</div>
+                <button
+                  type="button"
+                  className={styles.dismissBtn}
+                  onClick={() => setNewAccountInfo(null)}
+                >
+                  Got it
+                </button>
+              </div>
+            )}
+
+            {confirmMismatch && (
+              <div className={styles.mismatchCard}>
+                <div className={styles.mismatchHeader}>
+                  <span>⚠️</span>
+                  <strong>That email already belongs to {confirmMismatch.existingName}</strong>
+                </div>
+                <p className={styles.mismatchHint}>
+                  You typed &quot;{studentName}&quot;. If that&apos;s the same person, confirm below.
+                  If not — two students can&apos;t share one email — use a different email instead.
+                </p>
+                <div className={styles.mismatchActions}>
+                  <button type="button" className={styles.dismissBtn} onClick={handleConfirmMismatch} disabled={loading}>
+                    {loading ? "Enrolling..." : `Yes, that's ${confirmMismatch.existingName}`}
+                  </button>
+                  <button type="button" className={styles.mismatchCancelBtn} onClick={() => setConfirmMismatch(null)}>
+                    No, use a different email
+                  </button>
+                </div>
+              </div>
+            )}
+
             <form onSubmit={handleAddStudent} className={styles.form}>
               <h2 className={styles.formTitle}>Invite a Student</h2>
               <p className={styles.formHint}>
-                The student must have already created an account on Shiksha.
-                Enter their email to add them to a class.
+                Add a new student, or enroll one who already has a Shiksha account —
+                just fill in their details below.
               </p>
 
               <div className={styles.field}>
@@ -366,6 +439,18 @@ export default function TeacherSetupPage() {
               </div>
 
               <div className={styles.field}>
+                <label className={styles.label}>Student&apos;s Name</label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  placeholder="e.g. Priya Sharma"
+                  value={studentName}
+                  onChange={(e) => setStudentName(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className={styles.field}>
                 <label className={styles.label}>Student&apos;s Email</label>
                 <input
                   className={styles.input}
@@ -373,6 +458,22 @@ export default function TeacherSetupPage() {
                   placeholder="student@gmail.com"
                   value={studentEmail}
                   onChange={(e) => setStudentEmail(e.target.value)}
+                  required
+                />
+              </div>
+
+              <div className={styles.field}>
+                <label className={styles.label}>
+                  Temporary Password
+                  <span className={styles.labelHint}>only used if they don&apos;t have an account yet</span>
+                </label>
+                <input
+                  className={styles.input}
+                  type="text"
+                  autoComplete="off"
+                  placeholder="e.g. sunshine42"
+                  value={studentPassword}
+                  onChange={(e) => setStudentPassword(e.target.value)}
                   required
                 />
               </div>

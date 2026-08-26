@@ -78,41 +78,13 @@ Run the SQL migrations against your Supabase project. Go to **Supabase Dashboard
 1. `supabase/migrations/001_initial_schema.sql` — tables, trigger, RPC functions
 2. `supabase/migrations/002_rls_policies.sql` — Row-Level Security policies
 3. `supabase/migrations/003_two_axis_scoring.sql` — understanding_band/explanation_band/misconceptions columns (two-axis diagnostic scoring)
+4. `supabase/migrations/004_table_grants.sql` — explicit table GRANTs (required on local/some hosted setups or PostgREST returns 42501) plus the `find_student_by_email`/`increment_session_tokens` helper RPCs
+5. `supabase/migrations/005_admin_provisioned_school_assignment.sql` — lets a tutor-created student account carry an explicit `school_id`, bypassing `handle_new_user()`'s email-domain-matching fallback (see `docs/designs/tutoring-class-enrollment.md`)
 
 Or if you have the Supabase CLI linked:
 
 ```bash
 npx supabase db push
-```
-
-**Important:** After running migrations, also create the helper RPCs by running this SQL:
-
-```sql
--- Student email lookup (used by teacher enrollment)
-CREATE OR REPLACE FUNCTION public.find_student_by_email(p_email TEXT, p_school_id UUID)
-RETURNS TABLE(user_id UUID, full_name TEXT) AS $$
-BEGIN
-  RETURN QUERY
-  SELECT au.id, p.full_name
-  FROM auth.users au
-  JOIN profiles p ON p.id = au.id
-  JOIN school_members sm ON sm.user_id = au.id
-  WHERE au.email = p_email
-    AND sm.school_id = p_school_id
-    AND sm.role = 'student'
-  LIMIT 1;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
-
--- Token tracking (used by chat API)
-CREATE OR REPLACE FUNCTION public.increment_session_tokens(p_session_id UUID, p_tokens INT)
-RETURNS VOID AS $$
-BEGIN
-  UPDATE sessions
-  SET total_tokens = COALESCE(total_tokens, 0) + p_tokens
-  WHERE id = p_session_id;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
 ```
 
 ### 4. Supabase Auth Config
@@ -137,14 +109,18 @@ Open [http://localhost:3000](http://localhost:3000).
 2. You'll be redirected to `/teacher/dashboard` → click "Manage" in the sidebar
 3. **Create a class** (e.g., "8-B Biology" / "Biology" / grade "8")
 4. **Add a topic** (e.g., "Photosynthesis") with key concepts the AI will grade against
-5. **Sign up a student** in a different browser/incognito → select "📘 Student"
-6. **Enroll the student** using their email on the teacher Manage page
-7. Student logs in → sees the topic on their dashboard → clicks to start teaching
+5. **Add a student** on the teacher Manage page's "Invite a Student" tab — either
+   enter a Name + Email + Temporary Password to create a brand-new account
+   directly (no self-signup needed — tell the student their email + password
+   to log in with), or enter the email of a student who already self-signed-up
+   (in a different browser/incognito, select "📘 Student" at `/signup`) to
+   enroll their existing account
+6. Student logs in → sees the topic on their dashboard → clicks to start teaching
 
 ### 7. Verify Everything Works
 
 ```bash
-# Unit tests (98 tests)
+# Unit tests
 pnpm test
 
 # Build check
@@ -167,8 +143,8 @@ but Vercel is the natural fit for Next.js).
    - `supabase/migrations/001_initial_schema.sql`
    - `supabase/migrations/002_rls_policies.sql`
    - `supabase/migrations/003_two_axis_scoring.sql`
-   - The helper RPC block in [step 3 above](#3-database-setup) (`find_student_by_email`,
-     `increment_session_tokens`) — not yet folded into a migration file.
+   - `supabase/migrations/004_table_grants.sql`
+   - `supabase/migrations/005_admin_provisioned_school_assignment.sql`
 3. Optionally run `supabase/seed.sql` if you want sample data instead of creating a
    class/topic by hand.
 4. Note the **Project URL** and **anon public key** from Settings → API — you'll need
