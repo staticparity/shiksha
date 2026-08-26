@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
+import { MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH } from "@/lib/agents/concept-generator";
 import styles from "./page.module.css";
 
 interface ClassData {
@@ -9,6 +10,12 @@ interface ClassData {
   name: string;
   subject: string;
   grade: string;
+}
+
+interface ConceptRow {
+  concept: string;
+  description: string;
+  sourceExcerpt?: string;
 }
 
 export default function TeacherSetupPage() {
@@ -26,7 +33,10 @@ export default function TeacherSetupPage() {
   const [selectedClassId, setSelectedClassId] = useState("");
   const [topicTitle, setTopicTitle] = useState("");
   const [topicChapter, setTopicChapter] = useState("");
-  const [concepts, setConcepts] = useState([{ concept: "", description: "" }]);
+  const [concepts, setConcepts] = useState<ConceptRow[]>([{ concept: "", description: "" }]);
+  const [topicContent, setTopicContent] = useState("");
+  const [generating, setGenerating] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
 
   // Student form
   const [studentClassId, setStudentClassId] = useState("");
@@ -106,7 +116,9 @@ export default function TeacherSetupPage() {
         title: topicTitle,
         subject: selectedClass?.subject ?? "",
         chapter: topicChapter,
-        knowledgeConcepts: concepts.filter((c) => c.concept.trim()),
+        knowledgeConcepts: concepts
+          .filter((c) => c.concept.trim())
+          .map(({ concept, description }) => ({ concept, description })),
       }),
     });
     const data = await res.json();
@@ -117,6 +129,7 @@ export default function TeacherSetupPage() {
       setTopicTitle("");
       setTopicChapter("");
       setConcepts([{ concept: "", description: "" }]);
+      setTopicContent("");
     } else {
       showMessage("error", data.error || "Failed to create topic");
     }
@@ -179,13 +192,65 @@ export default function TeacherSetupPage() {
 
   const updateConcept = (index: number, field: "concept" | "description", value: string) => {
     const updated = [...concepts];
-    updated[index][field] = value;
+    // Editing a generated row by hand means the excerpt no longer reliably
+    // points at the (now-edited) text — drop the stale hint rather than
+    // leave a misleading pointer.
+    updated[index] = { ...updated[index], [field]: value, sourceExcerpt: undefined };
     setConcepts(updated);
   };
 
   const removeConcept = (index: number) => {
     if (concepts.length <= 1) return;
     setConcepts(concepts.filter((_, i) => i !== index));
+  };
+
+  const hasTypedConcepts = () =>
+    concepts.some((c) => c.concept.trim() || c.description.trim());
+
+  const handleGenerateClick = () => {
+    if (hasTypedConcepts()) {
+      setConfirmReplace(true);
+    } else {
+      runGenerate();
+    }
+  };
+
+  const handleConfirmReplace = () => {
+    setConfirmReplace(false);
+    runGenerate();
+  };
+
+  const runGenerate = async () => {
+    setGenerating(true);
+    try {
+      const res = await fetch("/api/teacher/generate-concepts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ content: topicContent }),
+      });
+      const data = await res.json();
+
+      if (!res.ok) {
+        // Existing rows are untouched — a failed generation never wipes
+        // what the teacher already typed.
+        showMessage("error", data.message || data.error || "Couldn't generate concepts. Try again or add them manually.");
+        return;
+      }
+
+      const generated: ConceptRow[] = data.key_concepts ?? [];
+      if (generated.length === 0) {
+        showMessage("error", "Couldn't find clear concepts in that — try different content or add them manually.");
+        return;
+      }
+
+      setConcepts(generated);
+      showMessage(
+        "success",
+        `Generated ${generated.length} concept${generated.length === 1 ? "" : "s"} — review before adding the topic.`
+      );
+    } finally {
+      setGenerating(false);
+    }
   };
 
   return (
@@ -321,6 +386,65 @@ export default function TeacherSetupPage() {
                 </div>
               </div>
 
+              {/* Generate from Content */}
+              <div className={styles.generateSection}>
+                <label className={styles.label}>
+                  Generate from content
+                  <span className={styles.labelHint}>optional — paste notes or a textbook excerpt</span>
+                </label>
+                <textarea
+                  className={styles.textarea}
+                  placeholder="Paste your notes, a textbook excerpt, or other prep material here..."
+                  value={topicContent}
+                  onChange={(e) => setTopicContent(e.target.value)}
+                  rows={5}
+                  maxLength={MAX_CONTENT_LENGTH}
+                />
+                <div className={styles.generateRow}>
+                  <span className={styles.charCount}>
+                    {topicContent.trim().length}/{MAX_CONTENT_LENGTH}
+                  </span>
+                  <button
+                    type="button"
+                    className={styles.generateBtn}
+                    onClick={handleGenerateClick}
+                    disabled={generating || topicContent.trim().length < MIN_CONTENT_LENGTH}
+                  >
+                    {generating ? "Generating..." : "✨ Generate from content"}
+                  </button>
+                </div>
+
+                {confirmReplace && (
+                  <div className={styles.mismatchCard}>
+                    <div className={styles.mismatchHeader}>
+                      <span>⚠️</span>
+                      <strong>This replaces what you&apos;ve typed below</strong>
+                    </div>
+                    <p className={styles.mismatchHint}>
+                      Generating will overwrite the concept rows you&apos;ve already filled in. You can still edit
+                      anything afterward.
+                    </p>
+                    <div className={styles.mismatchActions}>
+                      <button
+                        type="button"
+                        className={styles.dismissBtn}
+                        onClick={handleConfirmReplace}
+                        disabled={generating}
+                      >
+                        {generating ? "Generating..." : "Yes, replace and generate"}
+                      </button>
+                      <button
+                        type="button"
+                        className={styles.mismatchCancelBtn}
+                        onClick={() => setConfirmReplace(false)}
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
               {/* Key Things to Know */}
               <div className={styles.conceptsSection}>
                 <label className={styles.label}>
@@ -346,6 +470,9 @@ export default function TeacherSetupPage() {
                         value={c.description}
                         onChange={(e) => updateConcept(i, "description", e.target.value)}
                       />
+                      {c.sourceExcerpt && (
+                        <div className={styles.sourceExcerpt}>from: &quot;{c.sourceExcerpt}&quot;</div>
+                      )}
                     </div>
                     {concepts.length > 1 && (
                       <button
