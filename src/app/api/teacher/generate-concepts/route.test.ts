@@ -1,3 +1,4 @@
+vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => ({ rpc: async () => ({ data: true, error: null }) }) }));
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { NoObjectGeneratedError, APICallError } from "ai";
 
@@ -112,7 +113,7 @@ describe("POST /api/teacher/generate-concepts", () => {
   it("returns 502 when the model's output fails schema validation", async () => {
     mockSupabase({});
     generateObjectMock.mockRejectedValueOnce(
-      new NoObjectGeneratedError({ message: "invalid schema", text: "{bad json" })
+      new NoObjectGeneratedError({ response: { id: 'test', modelId: 'test', timestamp: new Date() }, finishReason: 'error', usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0, inputTokenDetails: { noCacheTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 }, outputTokenDetails: { textTokens: 0, reasoningTokens: 0 } }, message: "invalid schema", text: "{bad json" })
     );
     const { POST } = await import("./route");
 

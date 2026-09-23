@@ -1,3 +1,5 @@
+import { z } from "zod";
+import { readBody } from "@/lib/api/validation";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 
@@ -113,10 +115,10 @@ export async function enrollStudent(
       email: studentEmail,
       password: studentPassword,
       email_confirm: true,
+      app_metadata: { school_id: schoolId },
       user_metadata: {
         full_name: studentName,
         role: "student",
-        school_id: schoolId,
         created_by_teacher_id: createdByTeacherId,
       },
     });
@@ -171,9 +173,7 @@ export async function enrollStudent(
     }
   }
 
-  const { error: enrollError } = await supabase
-    .from("class_enrollments")
-    .insert({ class_id: classId, student_id: studentId });
+  const { error: enrollError } = await supabase.rpc("enroll_verified_student", { p_class_id: classId, p_student_id: studentId });
 
   if (enrollError) {
     if (enrollError.code === "23505") {
@@ -191,6 +191,13 @@ export async function enrollStudent(
 
   return { ok: true, studentName: resolvedName, created };
 }
+
+const teacherBody = z.discriminatedUnion("action", [
+  z.object({ action: z.literal("get_classes") }),
+  z.object({ action: z.literal("create_class"), name: z.string().trim().min(1).max(120), subject: z.string().trim().min(1).max(120), grade: z.string().trim().max(30).optional() }),
+  z.object({ action: z.literal("create_topic"), classId: z.string().min(1).max(100), title: z.string().trim().min(1).max(200), subject: z.string().trim().min(1).max(120), chapter: z.string().max(200).optional(), description: z.string().max(2000).optional(), knowledgeConcepts: z.array(z.object({ concept: z.string().trim().min(1).max(200), description: z.string().trim().max(3000) })).max(30).optional() }),
+  z.object({ action: z.literal("add_student"), classId: z.string().min(1).max(100), studentEmail: z.email().max(254), studentName: z.string().trim().min(1).max(120), studentPassword: z.string().min(1).max(200), confirmed: z.boolean().optional() }),
+]);
 
 export async function POST(req: Request) {
   const supabase = await createClient();
@@ -214,7 +221,9 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not a teacher" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const parsed = teacherBody.safeParse(await readBody(req).catch(() => null));
+  if (!parsed.success) return Response.json({ error: `Invalid request: ${parsed.error.issues.map(i => i.path.join(".")).join(", ")}` }, { status: 400 });
+  const body = parsed.data;
 
   // ── Create Class ──────────────────────────────────────────────
   if (body.action === "create_class") {
@@ -232,7 +241,7 @@ export async function POST(req: Request) {
         subject,
         grade: grade || null,
       })
-      .select()
+      .select("id, name, subject, grade")
       .single();
 
     if (error) {
@@ -256,7 +265,7 @@ export async function POST(req: Request) {
     // Build knowledge_base from concepts
     const knowledge_base = knowledgeConcepts && knowledgeConcepts.length > 0
       ? {
-          key_concepts: knowledgeConcepts.map((c: any) => ({
+          key_concepts: knowledgeConcepts.map((c) => ({
             concept: c.concept,
             description: c.description,
           })),
@@ -275,7 +284,7 @@ export async function POST(req: Request) {
         description: description || null,
         knowledge_base,
       })
-      .select()
+      .select("id, title, subject, chapter, class_id")
       .single();
 
     if (error) {

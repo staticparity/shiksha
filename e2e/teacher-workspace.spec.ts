@@ -1,0 +1,98 @@
+import { test, expect } from '@playwright/test';
+test.skip(!process.env.TEACHER_WORKSPACE_TEST, 'Run with playwright.teacher.config.ts and isolated fixtures');
+const teacherId = '00000000-0000-4000-8000-000000000001';
+test.beforeEach(async ({ context }) => {
+  const user = { id: teacherId, aud: 'authenticated', role: 'authenticated', email: 'ananya@example.test', app_metadata: {}, user_metadata: { full_name: 'Ananya Sharma' } };
+  const encode = (value: unknown) => Buffer.from(JSON.stringify(value)).toString('base64url');
+  const token = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: teacherId, exp: Math.floor(Date.now()/1000)+3600, role: 'authenticated' })}.test`;
+  await context.addCookies([{ name:'sb-127-auth-token', value:`base64-${encode({ access_token:token,refresh_token:'test',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user })}`, domain:'127.0.0.1', path:'/' }]);
+});
+test('class progress, search, filters, pagination, and student check-in', async ({ page }) => {
+  await page.goto('/teacher/dashboard');
+  await expect(page.getByRole('heading', { name:'Student understanding' })).toBeVisible();
+  await expect(page.getByText('1–15 of 23 students')).toBeVisible();
+  await page.getByRole('button', { name:'Next page' }).click();
+  await expect(page.getByText('16–23 of 23 students')).toBeVisible();
+  await page.getByRole('textbox', { name:'Search students' }).fill('Aanya');
+  await expect(page.getByText('1–1 of 1 students')).toBeVisible();
+  await page.getByRole('button', { name:/Aanya Patel/ }).click();
+  const checkIn = page.getByRole('dialog', { name:'Aanya Patel' });
+  await expect(checkIn).toBeVisible();
+  await expect(checkIn.getByText('The explanation did not connect light energy to stored chemical energy.')).toBeVisible();
+  await expect(checkIn.getByText('Agreed with a false claim')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('button', { name:/Aanya Patel/ })).toBeFocused();
+  await page.getByRole('textbox', { name:'Search students' }).fill('');
+  await page.getByRole('combobox', { name:'Filter students' }).selectOption('support');
+  await expect(page.getByText('1–8 of 8 students')).toBeVisible();
+  await page.getByRole('combobox', { name:'Filter students' }).selectOption('all');
+  await page.evaluate(() => window.scrollTo({ top:0, behavior:'instant' }));
+  await page.screenshot({ path:'/private/tmp/shiksha-teacher-desktop.png', fullPage:true });
+  await page.getByRole('combobox', { name:'Class overview' }).selectOption('00000000-0000-4000-8000-000000000011');
+  await expect(page.getByRole('heading', { name:'Make room for your learners.' })).toBeVisible();
+});
+test('misconception alerts filter affected students and clear when switching class', async ({page}) => {
+  await page.goto('/teacher/dashboard');
+  await expect(page.getByText('8 of 19 assessed students have an unresolved misconception in Photosynthesis: Plants get their food from soil.')).toBeVisible();
+  await page.getByRole('button', {name:'Show students: Plants get their food from soil · Photosynthesis'}).click();
+  await expect(page.getByRole('heading', {name:'Student understanding'})).toBeFocused();
+  await expect(page.getByText('1–8 of 8 students')).toBeVisible();
+  await expect(page.getByRole('button', {name:/Rohan Gupta/})).toHaveCount(0);
+  await page.getByRole('button', {name:'Clear focus'}).click();
+  await expect(page.getByText('1–15 of 23 students')).toBeVisible();
+  await page.getByRole('button', {name:/Rohan Gupta/}).click();
+  const dialog = page.getByRole('dialog', {name:'Rohan Gupta'});
+  await expect(dialog.getByText('Corrected in this attempt')).toBeVisible();
+  await dialog.getByRole('button', {name:'Close student details'}).click();
+  await page.getByRole('button', {name:'Show students: Plants get their food from soil · Photosynthesis'}).click();
+  await page.getByRole('combobox', {name:'Class overview'}).selectOption('00000000-0000-4000-8000-000000000011');
+  await expect(page.getByRole('heading', {name:'Make room for your learners.'})).toBeVisible();
+  await expect(page.getByRole('button', {name:'Clear focus'})).toHaveCount(0);
+});
+test('failed dashboard requests offer a working retry', async ({ page }) => {
+  let failed = true;
+  await page.route('**/api/dashboard?*', route => failed ? route.fulfill({ status:500,json:{error:'Temporary failure'} }) : route.continue());
+  await page.goto('/teacher/dashboard');
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Temporary failure');
+  failed = false;
+  await page.getByRole('button', { name:'Try again' }).click();
+  await expect(page.getByRole('heading', { name:'Student understanding' })).toBeVisible();
+});
+test('setup links preserve class, network errors preserve entries, and new classes become selected', async ({ page }) => {
+  let created = false;
+  await page.route('**/api/teacher', async route => {
+    const body = route.request().postDataJSON();
+    if(body.action === 'get_classes') return route.fulfill({ json: created ? [{ id:'new-class',name:'10-C Chemistry',subject:'Chemistry',grade:'10' },{id:'00000000-0000-4000-8000-000000000010',name:'8-B Biology',subject:'Biology',grade:'8'}] : [{id:'00000000-0000-4000-8000-000000000010',name:'8-B Biology',subject:'Biology',grade:'8'}] });
+    if(body.action === 'create_class') { created = true; return route.fulfill({json:{id:'new-class',name:'10-C Chemistry'}}); }
+    return route.abort();
+  });
+  await page.goto('/teacher/setup?tab=topic&classId=00000000-0000-4000-8000-000000000010');
+  await expect(page.getByRole('heading', { name:'Add a Topic',exact:true })).toBeVisible();
+  await expect(page.getByLabel('Class', { exact:true })).toHaveValue('00000000-0000-4000-8000-000000000010');
+  await page.getByLabel('Topic Name').fill('Plant nutrition');
+  await page.getByRole('button', { name:'Add Topic',exact:true }).click();
+  await expect(page.getByRole('main').getByRole('alert')).toContainText('Could not connect');
+  await expect(page.getByLabel('Topic Name')).toHaveValue('Plant nutrition');
+  await page.getByRole('button', { name:'1 Create Class', exact:true }).click();
+  await page.getByLabel('Class Name').fill('10-C Chemistry');
+  await page.getByLabel('Subject', { exact:true }).fill('Chemistry');
+  await page.getByRole('button', { name:/Create Class.*→/ }).click();
+  await expect(page.getByLabel('Class', { exact:true })).toHaveValue('new-class');
+  await page.screenshot({ path:'/private/tmp/shiksha-teacher-setup.png', fullPage:true });
+});
+test('mobile workspace has no page overflow and supports navigation', async ({ page }) => {
+  await page.setViewportSize({ width:390,height:844 });
+  await page.goto('/teacher/dashboard');
+  await expect(page.getByRole('heading', { name:'Student understanding' })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  await page.screenshot({ path:'/private/tmp/shiksha-teacher-mobile.png', fullPage:true });
+  await page.getByRole('button', {name:/Aanya Patel/}).click();
+  const dialog = page.getByRole('dialog', {name:'Aanya Patel'});
+  await expect(dialog).toBeVisible();
+  expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
+  await page.screenshot({path:'/private/tmp/shiksha-teacher-check-in-mobile.png'});
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name:'Toggle navigation' }).click();
+  await page.getByRole('link', { name:'Classes & topics' }).click();
+  await expect(page).toHaveURL(/\/teacher\/setup/);
+});

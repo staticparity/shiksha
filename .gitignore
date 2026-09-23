@@ -46,3 +46,5 @@ gstack/
 e2e/.artifacts/
 playwright-report/
 test-results/
+
+.next-teacher/

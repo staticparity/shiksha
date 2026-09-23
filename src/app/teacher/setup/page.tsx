@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import Link from "next/link";
+import { useState, useEffect, useCallback } from "react";
 import { GlassCard } from "@/components/ui/glass-card";
 import { MIN_CONTENT_LENGTH, MAX_CONTENT_LENGTH } from "@/lib/agents/concept-generator";
 import styles from "./page.module.css";
@@ -18,9 +19,22 @@ interface ConceptRow {
   sourceExcerpt?: string;
 }
 
+  async function teacherRequest(body: Record<string, unknown>) {
+    try {
+      return await fetch("/api/teacher", {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+      });
+    } catch {
+      return Response.json({ error: "Could not connect. Your entries are saved here; please try again." }, { status: 503 });
+    }
+  }
+
+
 export default function TeacherSetupPage() {
   const [classes, setClasses] = useState<ClassData[]>([]);
   const [activeTab, setActiveTab] = useState<"class" | "topic" | "student">("class");
+  const [classesLoading, setClassesLoading] = useState(true);
+  const [classesError, setClassesError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
@@ -46,46 +60,45 @@ export default function TeacherSetupPage() {
   const [newAccountInfo, setNewAccountInfo] = useState<{ name: string; password: string } | null>(null);
   const [confirmMismatch, setConfirmMismatch] = useState<{ existingName: string } | null>(null);
 
-  useEffect(() => {
-    loadClasses();
+  const loadClasses = useCallback(async (preferredId = "", tab: string | null = null) => {
+    setClassesLoading(true);
+    setClassesError(false);
+    try {
+      const res = await teacherRequest({ action: "get_classes" });
+      if (!res.ok) throw new Error("Could not load classes");
+      const data: ClassData[] = await res.json();
+      setClasses(data);
+      const id = data.find(c => c.id === preferredId)?.id ?? data[0]?.id ?? "";
+      if (id) { setSelectedClassId(id); setStudentClassId(id); }
+      if (data.length && (tab === "topic" || tab === "student")) setActiveTab(tab);
+    } catch { setClassesError(true); }
+    finally { setClassesLoading(false); }
   }, []);
 
-  const loadClasses = async () => {
-    const res = await fetch("/api/teacher", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ action: "get_classes" }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      setClasses(data);
-      if (data.length > 0 && !selectedClassId) {
-        setSelectedClassId(data[0].id);
-        setStudentClassId(data[0].id);
-      }
-    }
-  };
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get("tab");
+    loadClasses(params.get("classId") ?? "", tab);
+  }, [loadClasses]);
+
+
 
   const showMessage = (type: "success" | "error", text: string) => {
     setMessage({ type, text });
-    setTimeout(() => setMessage(null), 4000);
+
   };
 
   // Auto-advance after successful class creation
   const handleCreateClass = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
-    const res = await fetch("/api/teacher", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await teacherRequest({
         action: "create_class",
         name: className,
         subject: classSubject,
         grade: classGrade,
-      }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: "Unexpected response. Please try again." }));
     setLoading(false);
 
     if (res.ok) {
@@ -93,7 +106,7 @@ export default function TeacherSetupPage() {
       setClassName("");
       setClassSubject("");
       setClassGrade("");
-      await loadClasses();
+      await loadClasses(data.id);
       setActiveTab("topic"); // Auto-advance to topic creation
     } else {
       showMessage("error", data.error || "Failed to create class");
@@ -107,10 +120,7 @@ export default function TeacherSetupPage() {
     // Get the selected class to auto-fill subject
     const selectedClass = classes.find((c) => c.id === selectedClassId);
 
-    const res = await fetch("/api/teacher", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await teacherRequest({
         action: "create_topic",
         classId: selectedClassId,
         title: topicTitle,
@@ -119,9 +129,8 @@ export default function TeacherSetupPage() {
         knowledgeConcepts: concepts
           .filter((c) => c.concept.trim())
           .map(({ concept, description }) => ({ concept, description })),
-      }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: "Unexpected response. Please try again." }));
     setLoading(false);
 
     if (res.ok) {
@@ -143,19 +152,15 @@ export default function TeacherSetupPage() {
   const submitAddStudent = async (confirmed: boolean) => {
     setLoading(true);
     setNewAccountInfo(null);
-    const res = await fetch("/api/teacher", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
+    const res = await teacherRequest({
         action: "add_student",
         classId: studentClassId,
         studentName,
         studentEmail,
         studentPassword,
         confirmed,
-      }),
     });
-    const data = await res.json();
+    const data = await res.json().catch(() => ({ error: "Unexpected response. Please try again." }));
     setLoading(false);
 
     if (res.ok) {
@@ -248,6 +253,8 @@ export default function TeacherSetupPage() {
         "success",
         `Generated ${generated.length} concept${generated.length === 1 ? "" : "s"} — review before adding the topic.`
       );
+    } catch {
+      showMessage("error", "Could not connect. Your concept rows are unchanged; please try again.");
     } finally {
       setGenerating(false);
     }
@@ -256,37 +263,40 @@ export default function TeacherSetupPage() {
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        <h1 className={styles.pageTitle}>⚙️ Manage Class</h1>
+        <div className={styles.pageHeader}><div><p className={styles.eyebrow}>MAKE SPACE FOR UNDERSTANDING</p><h1 className={styles.pageTitle}>Your classroom, thoughtfully prepared.</h1></div><Link className={styles.backLink} href="/teacher/dashboard">← Class overview</Link></div>
         <p className={styles.pageSubtitle}>
-          Set up your class in 3 steps: create a class, add what students should learn, then invite them.
+          A place for your learners, the ideas that matter, and the conversations that make them stick.
         </p>
 
         {/* Message Toast */}
         {message && (
-          <div className={`${styles.toast} ${message.type === "error" ? styles.toastError : styles.toastSuccess}`}>
-            {message.text}
+          <div role={message.type === "error" ? "alert" : "status"} className={`${styles.toast} ${message.type === "error" ? styles.toastError : styles.toastSuccess}`}>
+            {message.text}<button type="button" onClick={() => setMessage(null)} aria-label="Dismiss message">✕</button>
           </div>
         )}
 
+        {classesLoading && <p role="status" className={styles.loadNotice}>Loading your classes…</p>}
+        {classesError && <div role="alert" className={styles.loadNotice}>We couldn’t load your classes. <button type="button" onClick={() => loadClasses()}>Try again</button></div>}
         {/* Step Tabs */}
         <div className={styles.tabs}>
           <button
             className={`${styles.tab} ${activeTab === "class" ? styles.tabActive : ""}`}
-            onClick={() => setActiveTab("class")}
+            onClick={() => { setActiveTab("class"); setMessage(null); }}
+            disabled={loading || generating}
           >
             <span className={styles.tabStep}>1</span> Create Class
           </button>
           <button
             className={`${styles.tab} ${activeTab === "topic" ? styles.tabActive : ""}`}
-            onClick={() => setActiveTab("topic")}
-            disabled={classes.length === 0}
+            onClick={() => { setActiveTab("topic"); setMessage(null); }}
+            disabled={classesLoading || classes.length === 0 || loading || generating}
           >
             <span className={styles.tabStep}>2</span> Add Topics
           </button>
           <button
             className={`${styles.tab} ${activeTab === "student" ? styles.tabActive : ""}`}
-            onClick={() => setActiveTab("student")}
-            disabled={classes.length === 0}
+            onClick={() => { setActiveTab("student"); setMessage(null); }}
+            disabled={classesLoading || classes.length === 0 || loading || generating}
           >
             <span className={styles.tabStep}>3</span> Invite Students
           </button>
@@ -295,14 +305,14 @@ export default function TeacherSetupPage() {
         {/* ── Step 1: Create Class ─────────────────────────────── */}
         {activeTab === "class" && (
           <GlassCard>
-            <form onSubmit={handleCreateClass} className={styles.form}>
+            <form onSubmit={handleCreateClass}><fieldset disabled={loading} className={styles.form}>
               <h2 className={styles.formTitle}>Create a Class</h2>
               <p className={styles.formHint}>
                 A class groups your students and the topics you want them to learn.
               </p>
               <div className={styles.field}>
-                <label className={styles.label}>Class Name</label>
-                <input
+                <label htmlFor="setup-field-1" className={styles.label}>Class Name</label>
+                <input id="setup-field-1"
                   className={styles.input}
                   placeholder="e.g. 8-B Biology"
                   value={className}
@@ -312,8 +322,8 @@ export default function TeacherSetupPage() {
               </div>
               <div className={styles.fieldRow}>
                 <div className={styles.field}>
-                  <label className={styles.label}>Subject</label>
-                  <input
+                  <label htmlFor="setup-field-2" className={styles.label}>Subject</label>
+                  <input id="setup-field-2"
                     className={styles.input}
                     placeholder="e.g. Biology"
                     value={classSubject}
@@ -322,8 +332,8 @@ export default function TeacherSetupPage() {
                   />
                 </div>
                 <div className={styles.field}>
-                  <label className={styles.label}>Grade (optional)</label>
-                  <input
+                  <label htmlFor="setup-field-3" className={styles.label}>Grade (optional)</label>
+                  <input id="setup-field-3"
                     className={styles.input}
                     placeholder="e.g. 8"
                     value={classGrade}
@@ -331,17 +341,17 @@ export default function TeacherSetupPage() {
                   />
                 </div>
               </div>
-              <button className={styles.submitBtn} type="submit" disabled={loading}>
+              <button className={styles.submitBtn} type="submit" disabled={loading || generating}>
                 {loading ? "Creating..." : "Create Class →"}
               </button>
-            </form>
+            </fieldset></form>
           </GlassCard>
         )}
 
         {/* ── Step 2: Add Topic ────────────────────────────────── */}
         {activeTab === "topic" && (
           <GlassCard>
-            <form onSubmit={handleCreateTopic} className={styles.form}>
+            <form onSubmit={handleCreateTopic}><fieldset disabled={loading || generating} className={styles.form}>
               <h2 className={styles.formTitle}>Add a Topic</h2>
               <p className={styles.formHint}>
                 A topic is something students learn — like &quot;Photosynthesis&quot; or &quot;Quadratic Equations.&quot;
@@ -349,8 +359,8 @@ export default function TeacherSetupPage() {
               </p>
 
               <div className={styles.field}>
-                <label className={styles.label}>Class</label>
-                <select
+                <label htmlFor="setup-field-4" className={styles.label}>Class</label>
+                <select id="setup-field-4"
                   className={styles.input}
                   value={selectedClassId}
                   onChange={(e) => setSelectedClassId(e.target.value)}
@@ -366,8 +376,8 @@ export default function TeacherSetupPage() {
 
               <div className={styles.fieldRow}>
                 <div className={styles.field}>
-                  <label className={styles.label}>Topic Name</label>
-                  <input
+                  <label htmlFor="setup-field-5" className={styles.label}>Topic Name</label>
+                  <input id="setup-field-5"
                     className={styles.input}
                     placeholder="e.g. Photosynthesis"
                     value={topicTitle}
@@ -376,8 +386,8 @@ export default function TeacherSetupPage() {
                   />
                 </div>
                 <div className={styles.field}>
-                  <label className={styles.label}>Chapter (optional)</label>
-                  <input
+                  <label htmlFor="setup-field-6" className={styles.label}>Chapter (optional)</label>
+                  <input id="setup-field-6"
                     className={styles.input}
                     placeholder="e.g. Chapter 7"
                     value={topicChapter}
@@ -388,11 +398,11 @@ export default function TeacherSetupPage() {
 
               {/* Generate from Content */}
               <div className={styles.generateSection}>
-                <label className={styles.label}>
+                <label htmlFor="setup-field-7" className={styles.label}>
                   Generate from content
                   <span className={styles.labelHint}>optional — paste notes or a textbook excerpt</span>
                 </label>
-                <textarea
+                <textarea id="setup-field-7"
                   className={styles.textarea}
                   placeholder="Paste your notes, a textbook excerpt, or other prep material here..."
                   value={topicContent}
@@ -447,7 +457,7 @@ export default function TeacherSetupPage() {
 
               {/* Key Things to Know */}
               <div className={styles.conceptsSection}>
-                <label className={styles.label}>
+                <label htmlFor="setup-field-8" className={styles.label}>
                   What should students know about this topic?
                 </label>
                 <p className={styles.conceptHint}>
@@ -460,12 +470,14 @@ export default function TeacherSetupPage() {
                     <div className={styles.conceptFields}>
                       <input
                         className={styles.conceptInput}
+                        aria-label={`Concept ${i + 1}`}
                         placeholder="Key idea (e.g. &quot;Role of chlorophyll&quot;)"
                         value={c.concept}
                         onChange={(e) => updateConcept(i, "concept", e.target.value)}
                       />
                       <input
                         className={styles.conceptDesc}
+                        aria-label={`Correct explanation for concept ${i + 1}`}
                         placeholder="What a correct explanation looks like (e.g. &quot;Chlorophyll absorbs light energy for the reaction&quot;)"
                         value={c.description}
                         onChange={(e) => updateConcept(i, "description", e.target.value)}
@@ -491,10 +503,10 @@ export default function TeacherSetupPage() {
                 </button>
               </div>
 
-              <button className={styles.submitBtn} type="submit" disabled={loading}>
+              <button className={styles.submitBtn} type="submit" disabled={loading || generating}>
                 {loading ? "Creating..." : "Add Topic"}
               </button>
-            </form>
+            </fieldset></form>
           </GlassCard>
         )}
 
@@ -508,7 +520,7 @@ export default function TeacherSetupPage() {
                   <strong>{newAccountInfo.name}&apos;s account is ready</strong>
                 </div>
                 <p className={styles.newAccountHint}>
-                  Give them this password to log in — they can change it afterward.
+                  Share this temporary password privately so they can log in.
                 </p>
                 <div className={styles.newAccountPassword}>{newAccountInfo.password}</div>
                 <button
@@ -532,7 +544,7 @@ export default function TeacherSetupPage() {
                   If not — two students can&apos;t share one email — use a different email instead.
                 </p>
                 <div className={styles.mismatchActions}>
-                  <button type="button" className={styles.dismissBtn} onClick={handleConfirmMismatch} disabled={loading}>
+                  <button type="button" className={styles.dismissBtn} onClick={handleConfirmMismatch} disabled={loading || generating}>
                     {loading ? "Enrolling..." : `Yes, that's ${confirmMismatch.existingName}`}
                   </button>
                   <button type="button" className={styles.mismatchCancelBtn} onClick={() => setConfirmMismatch(null)}>
@@ -542,7 +554,7 @@ export default function TeacherSetupPage() {
               </div>
             )}
 
-            <form onSubmit={handleAddStudent} className={styles.form}>
+            <form onSubmit={handleAddStudent}><fieldset disabled={loading} className={styles.form}>
               <h2 className={styles.formTitle}>Invite a Student</h2>
               <p className={styles.formHint}>
                 Add a new student, or enroll one who already has a Shiksha account —
@@ -551,7 +563,7 @@ export default function TeacherSetupPage() {
 
               <div className={styles.field}>
                 <label className={styles.label}>Class</label>
-                <select
+                <select id="setup-field-8"
                   className={styles.input}
                   value={studentClassId}
                   onChange={(e) => setStudentClassId(e.target.value)}
@@ -566,8 +578,8 @@ export default function TeacherSetupPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Student&apos;s Name</label>
-                <input
+                <label htmlFor="setup-field-9" className={styles.label}>Student&apos;s Name</label>
+                <input id="setup-field-9"
                   className={styles.input}
                   type="text"
                   placeholder="e.g. Priya Sharma"
@@ -578,8 +590,8 @@ export default function TeacherSetupPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>Student&apos;s Email</label>
-                <input
+                <label htmlFor="setup-field-10" className={styles.label}>Student&apos;s Email</label>
+                <input id="setup-field-10"
                   className={styles.input}
                   type="email"
                   placeholder="student@gmail.com"
@@ -590,14 +602,14 @@ export default function TeacherSetupPage() {
               </div>
 
               <div className={styles.field}>
-                <label className={styles.label}>
+                <label htmlFor="setup-field-11" className={styles.label}>
                   Temporary Password
                   <span className={styles.labelHint}>only used if they don&apos;t have an account yet</span>
                 </label>
-                <input
+                <input id="setup-field-11"
                   className={styles.input}
-                  type="text"
-                  autoComplete="off"
+                  type="password"
+                  autoComplete="new-password"
                   placeholder="e.g. sunshine42"
                   value={studentPassword}
                   onChange={(e) => setStudentPassword(e.target.value)}
@@ -605,10 +617,10 @@ export default function TeacherSetupPage() {
                 />
               </div>
 
-              <button className={styles.submitBtn} type="submit" disabled={loading}>
+              <button className={styles.submitBtn} type="submit" disabled={loading || generating}>
                 {loading ? "Enrolling..." : "Enroll Student"}
               </button>
-            </form>
+            </fieldset></form>
           </GlassCard>
         )}
 
@@ -619,15 +631,15 @@ export default function TeacherSetupPage() {
             <div className={styles.classList}>
               {classes.map((c) => (
                 <GlassCard key={c.id} interactive>
-                  <div className={styles.classItem}>
-                    <span className={styles.classIcon}>📁</span>
+                  <Link href={`/teacher/setup?classId=${c.id}&tab=topic`} onClick={() => { setSelectedClassId(c.id); setStudentClassId(c.id); setActiveTab("topic"); }} className={styles.classItem}>
+                    <span className={styles.classIcon}>▤</span>
                     <div>
                       <div className={styles.classItemName}>{c.name}</div>
                       <div className={styles.classItemMeta}>
                         {c.subject}{c.grade ? ` · Grade ${c.grade}` : ""}
                       </div>
                     </div>
-                  </div>
+                  </Link>
                 </GlassCard>
               ))}
             </div>

@@ -31,7 +31,7 @@ export const AXIS_BANDS = ["secure", "partial", "prompt_dependent", "unresolved"
 export type AxisBand = (typeof AXIS_BANDS)[number];
 
 export const MasteryResultSchema = z.object({
-  masteryScore: z.number().min(0).max(100).describe("Overall mastery score from 0-100"),
+  masteryScore: z.number().int().min(0).max(100).describe("Overall mastery score from 0-100"),
   understandingBand: z
     .enum(AXIS_BANDS)
     .describe(

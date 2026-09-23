@@ -1,191 +1,92 @@
-/**
- * POST /api/chat
- *
- * Dual-agent streaming endpoint.
- *
- * FLOW:
- *   1. Student sends message
- *   2. Evaluator Agent (has knowledge base) scores the message → critique
- *   3. Learner Agent (has critique, NOT knowledge) responds via Socratic questioning
- *   4. Response streams back to student
- *
- * The student only sees the Learner's response. The Evaluator's output
- * is internal — it steers the Learner without leaking answers.
- */
+import { streamText } from 'ai';
+import { openai } from '@ai-sdk/openai';
+import { createClient } from '@/lib/supabase/server';
+import { createAdminClient } from '@/lib/supabase/admin';
+import { buildLearnerPrompt, LEARNER_MAX_TOKENS, LEARNER_MODEL, LEARNER_TEMPERATURE } from '@/lib/agents/learner';
+import { evaluateStudentMessage, ZERO_SIGNALS } from '@/lib/agents/evaluator';
+import { ChatRequestSchema, messageText, readBody, type SessionLease } from '@/lib/api/validation';
 
-import { streamText } from "ai";
-import { openai } from "@ai-sdk/openai";
-import { createClient } from "@/lib/supabase/server";
-import {
-  buildLearnerPrompt,
-  LEARNER_MAX_TOKENS,
-  LEARNER_MODEL,
-  LEARNER_TEMPERATURE,
-  MAX_MESSAGES_PER_SESSION,
-} from "@/lib/agents/learner";
-import { evaluateStudentMessage, ZERO_SIGNALS } from "@/lib/agents/evaluator";
-
-export const maxDuration = 30;
-
-interface ChatMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
-/** Extract text from a message regardless of format (v6 parts or classic content). */
-function extractText(msg: Record<string, unknown>): string {
-  if (typeof msg.content === "string") return msg.content;
-  if (Array.isArray(msg.parts)) {
-    const textPart = msg.parts.find(
-      (p: Record<string, unknown>) => p.type === "text"
-    );
-    return (textPart?.text as string) ?? "";
-  }
-  return "";
-}
-
-/** Normalize v6 parts-based messages to classic {role, content} for streamText. */
-function normalizeMessages(
-  messages: Record<string, unknown>[]
-): ChatMessage[] {
-  return messages.map((msg) => ({
-    role: msg.role as "user" | "assistant",
-    content: extractText(msg),
-  }));
-}
-
+export const maxDuration = 60;
 export async function POST(req: Request) {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return new Response('Unauthorized', { status: 401 });
+  const parsed = ChatRequestSchema.safeParse(await readBody(req).catch(() => null));
+  if (!parsed.success) return new Response('Invalid chat request', { status: 400 });
+  const { sessionId, topicId, messages } = parsed.data;
+  const content = messageText(messages.at(-1)!);
+  if (!content || content.length > 8000) return new Response('Message must be 1–8000 characters', { status: 400 });
+  const admin = createAdminClient();
+  const requestId = crypto.randomUUID();
+  let claimed = false;
   try {
-    const supabase = await createClient();
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-
-    if (!user) {
-      return new Response("Unauthorized", { status: 401 });
-    }
-
-    const body = await req.json();
-    const rawMessages = body.messages as Record<string, unknown>[];
-    const topicId = body.topicId as string;
-    const sessionId = body.sessionId as string;
-
-    if (!topicId || !sessionId) {
-      return new Response("Missing topicId or sessionId", { status: 400 });
-    }
-
-    // Fetch topic — title + subject for Learner, knowledge_base for Evaluator
-    const { data: topic } = await supabase
-      .from("topics")
-      .select("title, subject, chapter, description, knowledge_base")
-      .eq("id", topicId)
-      .single();
-
-    if (!topic) {
-      return new Response("Topic not found", { status: 404 });
-    }
-
-    // Rate limiting
-    const { data: session } = await supabase
-      .from("sessions")
-      .select("message_count, status")
-      .eq("id", sessionId)
-      .eq("student_id", user.id)
-      .single();
-
-    if (!session) {
-      return new Response("Session not found", { status: 404 });
-    }
-
-    if (session.status !== "active") {
-      return new Response("Session is not active", { status: 400 });
-    }
-
-    if ((session.message_count ?? 0) >= MAX_MESSAGES_PER_SESSION) {
-      return Response.json(
-        {
-          error: "Message limit reached",
-          message: `You've reached the ${MAX_MESSAGES_PER_SESSION} message limit. Finish your session to get your mastery score!`,
-        },
-        { status: 429 }
-      );
-    }
-
-    const messages = normalizeMessages(rawMessages);
-
-    // ── Step 1: Evaluator Agent ─────────────────────────────────
-    const lastStudentMsg = messages.filter((m) => m.role === "user").pop();
-    let evalCritique: string | null = null;
-    // Which teaching components THIS message touches — sent to the client via
-    // a response header so Pip's "signals" checklist can light up live. The
-    // client accumulates these across turns (see chat-container.tsx); a
-    // false here just means "nothing new," never erases an earlier true.
-    let turnSignals = ZERO_SIGNALS;
-
-    if (lastStudentMsg && topic.knowledge_base) {
+    // Authorize through the user's RLS client before using privileged data.
+    const { data: ownSession, error: accessError } = await supabase.from('sessions').select('id, topic_id')
+      .eq('id', sessionId).eq('student_id', user.id).eq('topic_id', topicId).single();
+    if (accessError || !ownSession) return new Response('Session not found', { status: 404 });
+    const { data: topic, error: topicError } = await admin.from('topics').select('title, subject, description, knowledge_base').eq('id', topicId).single();
+    if (topicError || !topic) throw new Error('Could not load topic');
+    const quota = await admin.rpc('consume_ai_quota', { p_user_id: user.id });
+    if (quota.error) throw quota.error;
+    if (!quota.data) return new Response('Hourly request limit reached. Please try later.', { status: 429 });
+    const { data: session, error } = await admin.rpc('claim_session', {
+      p_session_id: sessionId, p_user_id: user.id, p_request_id: requestId, p_scoring: false,
+    }).maybeSingle<SessionLease>();
+    if (error) throw error;
+    if (!session) return new Response('Session busy, finished, or message limit reached', { status: 409 });
+    claimed = true;
+    if (!Array.isArray(session.transcript)) throw new Error('Invalid saved transcript');
+    let signals = ZERO_SIGNALS;
+    let critique: string | null = null;
+    let evaluatorTokens = 0;
+    if (topic.knowledge_base) {
       try {
-        const evalResult = await evaluateStudentMessage(
-          topic.title,
-          topic.description,
-          topic.knowledge_base,
-          lastStudentMsg.content as string
-        );
-        evalCritique = evalResult.critique;
-        turnSignals = evalResult.signals;
-      } catch (evalError) {
-        // Evaluator failure is non-fatal
-        console.warn("[Evaluator] Failed:", evalError);
-      }
+        const evaluation = await evaluateStudentMessage(topic.title, topic.description, topic.knowledge_base, content);
+        signals = evaluation.signals;
+        evaluatorTokens = evaluation.tokensUsed ?? 0;
+        // Only fixed coaching instructions cross the evaluator/learner boundary.
+        critique = evaluation.understandingScore < 0 ? 'Ask one simpler question; invite an example.'
+          : evaluation.understandingScore < 0.15 ? 'Ask the student to explain the mechanism in their own words.'
+          : 'Ask the student to apply their explanation to a new situation.';
+      } catch (error) { console.warn('[Evaluator] Failed', error); }
     }
-
-    // ── Step 2: Learner Agent ───────────────────────────────────
     const result = streamText({
-      model: openai(LEARNER_MODEL),
-      system: buildLearnerPrompt(topic.title, topic.subject, evalCritique),
-      messages,
-      maxOutputTokens: LEARNER_MAX_TOKENS,
-      temperature: LEARNER_TEMPERATURE,
-      onFinish: async ({ text, usage }) => {
-        const studentContent = extractText(
-          rawMessages[rawMessages.length - 1]
-        );
-
-        const newTranscriptEntries = [
-          {
-            role: "student" as const,
-            content: studentContent,
-            timestamp: new Date().toISOString(),
-          },
-          {
-            role: "learner" as const,
-            content: text,
-            timestamp: new Date().toISOString(),
-          },
-        ];
-
-        // Atomic transcript append + increment message count
-        await supabase.rpc("append_to_transcript", {
-          p_session_id: sessionId,
-          p_new_messages: JSON.stringify(newTranscriptEntries),
-        });
-
-        // Accumulate token usage
-        const tokensUsed =
-          (usage?.inputTokens ?? 0) + (usage?.outputTokens ?? 0);
-        if (tokensUsed > 0) {
-          await supabase.rpc("increment_session_tokens", {
-            p_session_id: sessionId,
-            p_tokens: tokensUsed,
+      model: openai(LEARNER_MODEL), system: buildLearnerPrompt(topic.title, topic.subject, critique),
+      messages: [...session.transcript.map((m: { role: string; content: string }) => ({
+        role: (m.role === 'student' ? 'user' : 'assistant') as 'user' | 'assistant', content: m.content,
+      })), { role: 'user', content }],
+      maxOutputTokens: LEARNER_MAX_TOKENS, temperature: LEARNER_TEMPERATURE,
+      timeout: 30_000, maxRetries: 1,
+    });
+    // Hold the stream open until persistence succeeds. A failed write errors the
+    // stream, so Finish cannot silently score an unsaved turn.
+    const stream = new ReadableStream({
+      async start(controller) {
+        let answer = '';
+        try {
+          for await (const chunk of result.textStream) { answer += chunk; controller.enqueue(new TextEncoder().encode(chunk)); }
+          if (!answer.trim()) throw new Error('Empty learner response');
+          const usage = await result.usage;
+          const saved = await admin.rpc('complete_chat', {
+            p_session_id: sessionId, p_request_id: requestId,
+            p_messages: [{ role: 'student', content, timestamp: new Date().toISOString() },
+              { role: 'learner', content: answer, signals, timestamp: new Date().toISOString() }],
+            p_tokens: evaluatorTokens + (usage.inputTokens ?? 0) + (usage.outputTokens ?? 0),
           });
+          if (saved.error || !saved.data) throw saved.error ?? new Error('Session lease expired');
+          controller.close();
+        } catch (error) {
+          console.error('[Chat] Turn failed', error);
+          controller.error(error);
+        } finally {
+          await admin.rpc('release_session', { p_session_id: sessionId, p_request_id: requestId });
         }
       },
     });
-
-    return result.toTextStreamResponse({
-      headers: { "X-Pip-Signals": JSON.stringify(turnSignals) },
-    });
+    return new Response(stream, { headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Pip-Signals': JSON.stringify(signals) } });
   } catch (error) {
-    console.error("[/api/chat] Error:", error);
-    return new Response("Internal server error", { status: 500 });
+    if (claimed) await admin.rpc('release_session', { p_session_id: sessionId, p_request_id: requestId });
+    console.error('[Chat]', error);
+    return new Response('Could not complete this turn. Please retry.', { status: 500 });
   }
 }

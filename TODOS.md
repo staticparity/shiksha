@@ -247,7 +247,16 @@ clean build.
 
 ---
 
-## V2: Class-wide misconception alerts for teacher dashboard
+## V2: Class-wide misconception alerts for teacher dashboard — DONE (2026-09-24)
+
+Implemented with latest-attempt aggregation scoped to each topic. Active and
+accepted misconceptions count toward alerts; corrected and obsolete findings do
+not. The 40% threshold uses students assessed on that topic and displays both
+counts. Teachers can filter to the affected roster and open student check-ins
+with saved diagnostic details. Unit and isolated browser tests cover the behavior;
+validation against live classroom data remains outstanding.
+
+Original scope:
 
 **What:** `src/app/api/dashboard/route.ts` already computes class-wide gap alerts
 (40% threshold) for teachers. Once T3 ships real misconception-status data, build the

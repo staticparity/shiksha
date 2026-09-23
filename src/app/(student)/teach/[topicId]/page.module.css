@@ -131,3 +131,5 @@
   color: var(--text-secondary);
   line-height: var(--leading-sm);
 }
+
+.scoringOverlay { position: fixed; inset: 0; z-index: 300; background: var(--bg-primary); display: grid; place-items: center; padding: 24px; }

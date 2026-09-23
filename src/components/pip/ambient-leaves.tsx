@@ -1,6 +1,5 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import styles from "./ambient-leaves.module.css";
 
 const COLORS = ["var(--accent-primary)", "var(--accent-secondary)", "var(--accent-gold)"];
@@ -20,24 +19,13 @@ interface Leaf {
  * (Shiksha V2/Shiksha Session from WhatsApp.html). Pure CSS animation,
  * decorative only — respects prefers-reduced-motion.
  *
- * Leaves are generated client-side only (useEffect, not render-time
- * Math.random()) to avoid an SSR/client hydration mismatch.
+ * Deterministic positions keep the server and client render identical.
  */
 export function AmbientLeaves() {
-  const [leaves, setLeaves] = useState<Leaf[]>([]);
-
-  useEffect(() => {
-    setLeaves(
-      Array.from({ length: LEAF_COUNT }, (_, i) => ({
-        id: i,
-        left: `${Math.random() * 100}%`,
-        size: 8 + Math.random() * 10,
-        duration: `${14 + Math.random() * 12}s`,
-        delay: `${-Math.random() * 20}s`,
-        color: COLORS[i % COLORS.length],
-      }))
-    );
-  }, []);
+  const leaves: Leaf[] = Array.from({ length: LEAF_COUNT }, (_, i) => ({
+    id: i, left: `${(i * 37 + 11) % 100}%`, size: 8 + (i * 7) % 10,
+    duration: `${14 + (i * 5) % 12}s`, delay: `${-(i * 3)}s`, color: COLORS[i % COLORS.length],
+  }));
 
   return (
     <div className={styles.field} aria-hidden="true">

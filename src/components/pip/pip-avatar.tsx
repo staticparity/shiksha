@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import type { TeachingSignals } from "@/lib/agents/evaluator";
+import type { TeachingSignals } from "@/lib/agents/signals";
 import styles from "./pip-avatar.module.css";
 
 export type PipMood = "curious" | "think" | "happy" | "neutral";
@@ -47,18 +46,11 @@ interface PipAvatarProps {
  * interaction design is real even though the final illustration isn't.
  */
 export function PipAvatar({ message, mood = "curious", isTyping = false, size = 200, signals }: PipAvatarProps) {
-  const [bubbleKey, setBubbleKey] = useState(0);
-
-  // Re-trigger the entrance animation whenever the message actually changes.
-  useEffect(() => {
-    setBubbleKey((k) => k + 1);
-  }, [message]);
-
   const effectiveMood = isTyping ? "think" : mood;
 
   return (
     <div className={styles.stack}>
-      <div key={bubbleKey} className={styles.bubble}>
+      <div key={isTyping ? "thinking" : "response"} className={styles.bubble}>
         {isTyping ? (
           <span className={styles.typing} aria-label="Pip is thinking">
             <i /><i /><i />
@@ -83,7 +75,7 @@ export function PipAvatar({ message, mood = "curious", isTyping = false, size = 
             <circle cx="70" cy="44" r="5" fill="var(--bg-secondary)" />
             <circle cx="60" cy="56" r="4" fill="var(--bg-secondary)" />
           </svg>
-          <div className={styles.pipLabel}>PIP · ART COMING</div>
+          <div className={styles.pipLabel}>PIP</div>
           <div className={styles.mood} key={effectiveMood}>{MOOD_EMOJI[effectiveMood]}</div>
         </div>
       </div>

@@ -15,6 +15,8 @@
 
 import { generateObject, NoObjectGeneratedError, APICallError } from "ai";
 import { openai } from "@ai-sdk/openai";
+import { createAdminClient } from "@/lib/supabase/admin";
+import { readBody } from "@/lib/api/validation";
 import { createClient } from "@/lib/supabase/server";
 import {
   GeneratedConceptsSchema,
@@ -48,8 +50,10 @@ export async function POST(req: Request) {
     return Response.json({ error: "Not a teacher" }, { status: 403 });
   }
 
-  const { content } = (await req.json()) as { content?: string };
-  const trimmed = (content ?? "").trim();
+  const body = await readBody(req).catch(() => null);
+  const content = body && typeof body === "object" && "content" in body ? body.content : null;
+  if (typeof content !== "string") return Response.json({ error: "Content must be text" }, { status: 400 });
+  const trimmed = content.trim();
 
   if (trimmed.length < MIN_CONTENT_LENGTH) {
     return Response.json(
@@ -66,6 +70,9 @@ export async function POST(req: Request) {
   }
 
   try {
+    const quota = await createAdminClient().rpc("consume_ai_quota", { p_user_id: user.id });
+    if (quota.error) throw quota.error;
+    if (!quota.data) return Response.json({ error: "Hourly request limit reached. Please try later." }, { status: 429 });
     const result = await generateObject({
       model: openai(CONCEPT_GENERATOR_MODEL),
       schema: GeneratedConceptsSchema,

@@ -3,6 +3,7 @@
  * POST /api/topics — Create topic (teachers only)
  */
 
+import { loadStudentProgress } from "@/lib/learning/progress";
 import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
@@ -42,26 +43,10 @@ export async function GET() {
       return Response.json({ error: error.message }, { status: 500 });
     }
 
-    // For each topic, get the student's best session score
-    const topicsWithScores = await Promise.all(
-      (topics ?? []).map(async (topic) => {
-        const { data: bestSession } = await supabase
-          .from("sessions")
-          .select("mastery_score, ended_at, status")
-          .eq("topic_id", topic.id)
-          .eq("student_id", user.id)
-          .eq("status", "completed")
-          .order("mastery_score", { ascending: false })
-          .limit(1)
-          .single();
-
-        return {
-          ...topic,
-          bestScore: bestSession?.mastery_score ?? null,
-          lastAttempt: bestSession?.ended_at ?? null,
-        };
-      })
-    );
+    const progress = await loadStudentProgress(supabase, user.id);
+    const topicsWithScores = (topics ?? []).map(topic => ({ ...topic,
+      ...(progress.get(topic.id) ?? { bestScore: null, latestScore: null, lastAttempt: null }),
+    }));
 
     return Response.json(topicsWithScores);
   } catch (error) {
@@ -113,7 +98,7 @@ export async function POST(req: Request) {
         knowledge_base: knowledgeBase || null,
         due_date: dueDate || null,
       })
-      .select()
+      .select("id, title, subject, chapter, description, due_date, class_id")
       .single();
 
     if (error) {

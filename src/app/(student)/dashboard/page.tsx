@@ -1,3 +1,4 @@
+import { loadStudentProgress } from "@/lib/learning/progress";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -29,30 +30,15 @@ export default async function StudentDashboard() {
     .single();
 
   // Get topics with best scores
-  const { data: topics } = await supabase
+  const { data: topics, error: topicsError } = await supabase
     .from("topics")
     .select("id, title, subject, chapter, class_id");
 
-  // Get best session per topic
-  const topicScores = await Promise.all(
-    (topics ?? []).map(async (topic) => {
-      const { data: session } = await supabase
-        .from("sessions")
-        .select("mastery_score, ended_at")
-        .eq("topic_id", topic.id)
-        .eq("student_id", user.id)
-        .eq("status", "completed")
-        .order("mastery_score", { ascending: false })
-        .limit(1)
-        .single();
-
-      return {
-        ...topic,
-        bestScore: session?.mastery_score ?? null,
-        lastAttempt: session?.ended_at ?? null,
-      };
-    })
-  );
+  if (topicsError) throw new Error("Could not load your topics. Please try again.");
+  const progressByTopic = await loadStudentProgress(supabase, user.id);
+  const topicScores = (topics ?? []).map(topic => ({ ...topic,
+    ...(progressByTopic.get(topic.id) ?? { bestScore: null, latestScore: null, lastAttempt: null }),
+  }));
 
   // Get streak
   const { data: streak } = await supabase
@@ -75,7 +61,7 @@ export default async function StudentDashboard() {
     .filter((c) => new Date(c.earned_at) > oneWeekAgo)
     .reduce((sum, c) => sum + c.credits_earned, 0);
 
-  const allScores = topicScores.map((t) => t.bestScore);
+  const allScores = topicScores.map((t) => t.latestScore);
   const progress = calculateOverallProgress(allScores);
   const masteredCount = allScores.filter((s) => s !== null && s >= 70).length;
 
@@ -102,7 +88,7 @@ export default async function StudentDashboard() {
 
         {/* Progress */}
         <GlassCard>
-          <ProgressBar value={progress} label="Overall Mastery" />
+          <ProgressBar value={progress} label="Mastery · latest completed attempts" />
         </GlassCard>
 
         {/* Topics */}
@@ -137,6 +123,9 @@ export default async function StudentDashboard() {
                               Last attempt: {formatRelativeTime(topic.lastAttempt)}
                             </span>
                           )}
+                          {topic.bestScore !== null && topic.bestScore !== topic.latestScore && (
+                            <span className={styles.topicLastAttempt}>Personal best: {topic.bestScore}%</span>
+                          )}
                           {!topic.lastAttempt && (
                             <span className={styles.topicLastAttempt}>
                               Not attempted yet
@@ -147,11 +136,11 @@ export default async function StudentDashboard() {
                       <div className={styles.topicRight}>
                         <span
                           className={styles.topicScore}
-                          style={{ color: getMasteryColor(topic.bestScore) }}
+                          style={{ color: getMasteryColor(topic.latestScore) }}
                         >
-                          {formatMasteryScore(topic.bestScore)}
+                          {formatMasteryScore(topic.latestScore)}
                         </span>
-                        <span>{getMasteryEmoji(topic.bestScore)}</span>
+                        <span>{getMasteryEmoji(topic.latestScore)}</span>
                         <span className={styles.teachCta}>Teach →</span>
                       </div>
                     </div>
