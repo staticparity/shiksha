@@ -8,6 +8,7 @@
      page-level scroll instead of this container's own fixed app-shell
      layout (header/stage/input) doing the sizing. */
   height: calc(100vh - var(--header-height));
+  height: calc(100dvh - var(--header-height));
   max-width: var(--chat-max-width);
   margin: 0 auto;
   position: relative;
@@ -66,7 +67,7 @@
   /* The bubble is normal flow now (see pip-avatar.module.css), not
      absolutely positioned above the character, so simple centering is
      correct — no special anchoring needed to reserve headroom. */
-  align-items: center;
+  align-items: safe center;
   justify-content: center;
   /* auto, not hidden: AmbientLeaves already self-clips via its own .field
      wrapper, so this isn't needed to contain the leaves. It's needed
@@ -232,3 +233,13 @@
     font-size: var(--text-base);
   }
 }
+
+.notice { padding: 10px 20px; background: var(--accent-secondary-dim); color: var(--accent-secondary-deep); font-size: 12px; }
+.error { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 10px; }
+@media (max-width: 640px) {
+  .header { flex-wrap: wrap; gap: 12px; }
+  .headerLeft { min-width: 0; }.topicTitle { overflow-wrap: anywhere; }
+  .headerRight { width: 100%; justify-content: space-between; gap: 8px; }
+  .modal { width: min(94vw, 420px); padding: 24px; }.modalActions { flex-wrap: wrap; }
+}
+@media (prefers-reduced-motion: reduce) { .modal, .transcriptPanel { animation: none; } }

@@ -29,7 +29,6 @@ interface ResultsClientProps {
     topics: {
       title: string;
       subject: string;
-      knowledge_base: { common_misconceptions?: string[] } | null;
     };
   };
   creditsEarned: number;
@@ -37,7 +36,7 @@ interface ResultsClientProps {
 
 export function ResultsClient({ session, creditsEarned }: ResultsClientProps) {
   const sortedGaps = sortGapsBySeverity(session.gaps ?? []);
-  const knownMisconceptions = session.topics.knowledge_base?.common_misconceptions;
+  const knownMisconceptions = undefined;
 
   return (
     <div className={styles.container}>

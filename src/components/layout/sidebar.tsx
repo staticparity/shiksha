@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import styles from "./sidebar.module.css";
 
 interface NavItem {
@@ -21,14 +21,21 @@ const studentNav: NavItem[] = [
 ];
 
 const teacherNav: NavItem[] = [
-  { href: "/teacher/dashboard", label: "Dashboard", icon: "📊" },
-  { href: "/teacher/setup", label: "Manage", icon: "⚙️" },
+  { href: "/teacher/dashboard", label: "Class overview", icon: "◫" },
+  { href: "/teacher/setup", label: "Classes & topics", icon: "▤" },
 ];
 
 export function Sidebar({ role, userName }: SidebarProps) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const close = (event: KeyboardEvent) => { if (event.key === "Escape") setMobileOpen(false); };
+    window.addEventListener("keydown", close);
+    return () => window.removeEventListener("keydown", close);
+  }, [mobileOpen]);
 
   const navItems = role === "teacher" ? teacherNav : studentNav;
   const initials = userName
@@ -60,6 +67,8 @@ export function Sidebar({ role, userName }: SidebarProps) {
         className={styles.mobileToggle}
         onClick={() => setMobileOpen(!mobileOpen)}
         aria-label="Toggle navigation"
+        aria-expanded={mobileOpen}
+        aria-controls="teacher-navigation"
       >
         <span className={styles.hamburger} data-open={mobileOpen}>
           <span />
@@ -78,6 +87,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
 
       {/* Sidebar */}
       <aside
+        id="teacher-navigation"
         className={styles.sidebar}
         data-collapsed={collapsed}
         data-mobile-open={mobileOpen}
@@ -85,8 +95,8 @@ export function Sidebar({ role, userName }: SidebarProps) {
         {/* Logo */}
         <div className={styles.logo}>
           <Link href={role === "teacher" ? "/teacher/dashboard" : "/dashboard"} className={styles.logoLink}>
-            <span className={styles.logoIcon}>🎓</span>
-            {!collapsed && <span className={styles.logoText}>Shiksha</span>}
+            <span className={styles.logoIcon}>✳</span>
+            {(!collapsed || mobileOpen) && <span className={styles.logoText}>Shiksha</span>}
           </Link>
           <button
             className={styles.collapseBtn}
@@ -105,10 +115,12 @@ export function Sidebar({ role, userName }: SidebarProps) {
               href={item.href}
               className={styles.navItem}
               data-active={isActive(item.href)}
+              aria-current={isActive(item.href) ? "page" : undefined}
+              aria-label={item.label}
               onClick={() => setMobileOpen(false)}
             >
               <span className={styles.navIcon}>{item.icon}</span>
-              {!collapsed && <span className={styles.navLabel}>{item.label}</span>}
+              {(!collapsed || mobileOpen) && <span className={styles.navLabel}>{item.label}</span>}
             </Link>
           ))}
         </nav>
@@ -119,7 +131,7 @@ export function Sidebar({ role, userName }: SidebarProps) {
         {/* User section */}
         <div className={styles.user}>
           <div className={styles.avatar}>{initials}</div>
-          {!collapsed && (
+          {(!collapsed || mobileOpen) && (
             <div className={styles.userInfo}>
               <span className={styles.userName}>{userName}</span>
               <span className={styles.userRole}>{role}</span>
@@ -131,9 +143,10 @@ export function Sidebar({ role, userName }: SidebarProps) {
         <button
           className={styles.logoutBtn}
           onClick={handleLogout}
+          aria-label="Sign out"
         >
-          <span className={styles.navIcon}>🚪</span>
-          {!collapsed && <span className={styles.navLabel}>Sign out</span>}
+          <span className={styles.navIcon}>↗</span>
+          {(!collapsed || mobileOpen) && <span className={styles.navLabel}>Sign out</span>}
         </button>
       </aside>
     </>

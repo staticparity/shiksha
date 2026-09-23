@@ -177,3 +177,7 @@ describe("constants", () => {
     expect(WISDOM_TEMPERATURE).toBeLessThanOrEqual(0.5);
   });
 });
+
+it("rejects fractional mastery scores that cannot be saved in the integer score column", () => {
+  expect(MasteryResultSchema.shape.masteryScore.safeParse(75.5).success).toBe(false);
+});

@@ -35,7 +35,7 @@ export function ChatInput({
   }, [value]);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       if (value.trim() && !disabled) {
         onSubmit();
@@ -63,6 +63,7 @@ export function ChatInput({
         disabled={disabled}
         className={styles.textarea}
         rows={1}
+        maxLength={maxLength}
         aria-label="Type your explanation"
       />
       <div className={styles.actions}>

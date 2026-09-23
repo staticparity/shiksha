@@ -28,7 +28,7 @@ export const EVALUATOR_TEMPERATURE = 0.3;
 
 export const EvalResultSchema = z.object({
   understandingScore: z
-    .number()
+    .number().min(-0.15).max(0.3)
     .describe(
       "Float between -0.15 (completely wrong/giving up) to +0.3 (got it right and proved it)"
     ),
@@ -63,15 +63,7 @@ export const EvalResultSchema = z.object({
 });
 
 export type EvalResult = z.infer<typeof EvalResultSchema>;
-export type TeachingSignals = EvalResult["signals"];
-
-export const ZERO_SIGNALS: TeachingSignals = {
-  definition: false,
-  example: false,
-  mechanism: false,
-  cause: false,
-  connection: false,
-};
+export { ZERO_SIGNALS, type TeachingSignals } from "./signals";
 
 /**
  * Run a lightweight evaluation of the student's latest message.
@@ -80,13 +72,11 @@ export const ZERO_SIGNALS: TeachingSignals = {
 export async function evaluateStudentMessage(
   topicTitle: string,
   topicDescription: string | null,
-  knowledgeBase: any,
+  knowledgeBase: unknown,
   latestMessage: string
-): Promise<EvalResult> {
-  const conceptSummary = knowledgeBase?.key_concepts
-    ?.map((c: any) => `${c.concept}: ${c.description}`)
-    .join("\n")
-    ?? "No specific concepts defined.";
+): Promise<EvalResult & { tokensUsed: number }> {
+  const knowledge = z.object({ key_concepts: z.array(z.object({ concept: z.string(), description: z.string() })) }).safeParse(knowledgeBase);
+  const conceptSummary = knowledge.success ? knowledge.data.key_concepts.map(c => `${c.concept}: ${c.description}`).join("\n") : "No specific concepts defined.";
 
   const result = await generateObject({
     model: openai(EVALUATOR_MODEL),
@@ -117,7 +107,9 @@ in isolation, not the conversation history. A message can touch several at
 once, or none.`,
     prompt: latestMessage,
     temperature: EVALUATOR_TEMPERATURE,
+    timeout: 10_000,
+    maxRetries: 0,
   });
 
-  return result.object;
+  return { ...result.object, tokensUsed: (result.usage?.inputTokens ?? 0) + (result.usage?.outputTokens ?? 0) };
 }

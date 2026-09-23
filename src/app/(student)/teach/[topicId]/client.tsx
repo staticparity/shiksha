@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import type { SavedSession } from "@/lib/learning/session";
+import { useState, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { ChatContainer } from "@/components/chat/chat-container";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { createClient } from "@/lib/supabase/client";
 import styles from "./page.module.css";
 
 interface TeachPageClientProps {
+  initialSession: SavedSession | null;
   topicId: string;
   topicTitle: string;
   topicSubject: string;
@@ -18,6 +20,7 @@ interface TeachPageClientProps {
 }
 
 export function TeachPageClient({
+  initialSession,
   topicId,
   topicTitle,
   topicSubject,
@@ -27,12 +30,11 @@ export function TeachPageClient({
   userId,
 }: TeachPageClientProps) {
   const router = useRouter();
-  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(initialSession?.id ?? null);
   const [isCreating, setIsCreating] = useState(false);
   const [isScoring, setIsScoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const getMessagesRef = useRef<(() => any[]) | null>(null);
 
   const createSession = useCallback(async () => {
     setIsCreating(true);
@@ -67,27 +69,22 @@ export function TeachPageClient({
     setError(null);
 
     try {
-      const chatMessages = getMessagesRef.current?.() ?? [];
-      const clientTranscript = chatMessages
-        .filter((msg) => msg.role === "user" || msg.role === "assistant")
-        .map((msg) => {
-          const text = msg.content
-            ?? msg.parts?.find((p: { type: string; text?: string }) => p.type === "text")?.text
-            ?? "";
-          return {
-            role: msg.role === "user" ? "student" : "learner",
-            content: text,
-            timestamp: msg.createdAt?.toISOString?.() ?? new Date().toISOString(),
-          };
-        });
-
       const response = await fetch("/api/mastery", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId, clientTranscript }),
+        body: JSON.stringify({ sessionId }),
       });
 
       if (!response.ok) {
+        // A response can be lost after the transaction commits. Recover that
+        // completed score instead of leaving the student in a retry loop.
+        if (response.status === 409) {
+          const saved = await fetch(`/api/sessions/${sessionId}`, { cache: "no-store" });
+          if (saved.ok && (await saved.json()).status === "completed") {
+            router.push(`/results/${sessionId}`);
+            return;
+          }
+        }
         const data = await response.json().catch(() => ({}));
         throw new Error(data.message || "Scoring failed");
       }
@@ -139,30 +136,23 @@ export function TeachPageClient({
     );
   }
 
-  if (isScoring) {
-    return (
-      <div className={styles.scoring}>
-        <div className={styles.scoringContent}>
-          <div className={styles.scoringSpinner} />
-          <h2 className={styles.scoringTitle}>Evaluating your explanation...</h2>
-          <p className={styles.scoringText}>
-            Our expert is analyzing your conversation for mastery, accuracy,
-            depth, and clarity.
-          </p>
-        </div>
-      </div>
-    );
-  }
 
   return (
+    <>
+    {isScoring && <div className={styles.scoringOverlay} role="status"><div className={styles.scoringContent}><div className={styles.scoringSpinner} /><h2>Evaluating your explanation…</h2><p>Looking at your understanding, reasoning, and examples.</p></div></div>}
+    <div inert={isScoring}>
+    {error && <p role="alert" className={styles.error}>{error}</p>}
     <ChatContainer
       topicId={topicId}
       topicTitle={topicTitle}
       topicSubject={topicSubject}
       topicChapter={topicChapter ?? undefined}
+      key={sessionId}
+      initialSession={initialSession}
       sessionId={sessionId}
       onFinish={handleFinish}
-      getMessagesRef={getMessagesRef}
     />
+    </div>
+    </>
   );
 }

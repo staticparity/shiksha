@@ -1,3 +1,4 @@
+import type { ComponentProps } from "react";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { ResultsClient } from "./client";
@@ -22,7 +23,7 @@ export default async function ResultsPage(props: PageProps<"/results/[sessionId]
   const { data: session } = await supabase
     .from("sessions")
     .select(
-      `${SESSION_FIELDS}, topic_id, topics ( title, subject, knowledge_base )`
+      `${SESSION_FIELDS}, topic_id, topics ( title, subject )`
     )
     .eq("id", sessionId)
     .eq("student_id", user.id)
@@ -34,5 +35,5 @@ export default async function ResultsPage(props: PageProps<"/results/[sessionId]
 
   const creditsEarned = calculateCredits(session.mastery_score ?? 0);
 
-  return <ResultsClient session={session as any} creditsEarned={creditsEarned} />;
+  return <ResultsClient session={session as unknown as ComponentProps<typeof ResultsClient>["session"]} creditsEarned={creditsEarned} />;
 }

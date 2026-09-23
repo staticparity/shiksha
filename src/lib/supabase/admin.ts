@@ -1,3 +1,4 @@
+import "server-only";
 import { createClient } from "@supabase/supabase-js";
 
 /**
@@ -7,6 +8,7 @@ import { createClient } from "@supabase/supabase-js";
  * via auth.admin.createUser().
  */
 export function createAdminClient() {
+  if (!process.env.SUPABASE_SERVICE_ROLE_KEY) throw new Error("SUPABASE_SERVICE_ROLE_KEY is required for server operations");
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!,

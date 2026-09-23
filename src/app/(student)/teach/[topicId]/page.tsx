@@ -1,3 +1,4 @@
+import { SAVED_SESSION_FIELDS, SavedSessionSchema } from "@/lib/learning/session";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import { TeachPageClient } from "./client";
@@ -30,8 +31,19 @@ export default async function TeachPage(props: PageProps<"/teach/[topicId]">) {
 
   const typedTopic = topic as unknown as TopicData;
 
+  // Inspect the most recent attempt, so a finished lesson never resumes an
+  // older unfinished attempt by accident.
+  const { data: lastSession, error: sessionError } = await supabase.from("sessions")
+    .select(SAVED_SESSION_FIELDS).eq("topic_id", topicId).eq("student_id", user.id)
+    .order("started_at", { ascending: false }).order("id", { ascending: false }).limit(1).maybeSingle();
+  if (sessionError) throw new Error("Could not load your saved lesson. Please try again.");
+  const initialSession = lastSession && ["active", "scoring"].includes(lastSession.status)
+    ? SavedSessionSchema.parse(lastSession) : null;
+
   return (
     <TeachPageClient
+      key={topicId}
+      initialSession={initialSession}
       topicId={topicId}
       topicTitle={typedTopic.title}
       topicSubject={typedTopic.subject}

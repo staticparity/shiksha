@@ -15,9 +15,13 @@ const insertCalls: Array<Record<string, unknown>> = [];
 
 function makeSupabase() {
   return {
-    rpc: vi.fn(() => ({
-      maybeSingle: vi.fn(() => Promise.resolve(rpcResults.shift() ?? { data: null, error: null })),
-    })),
+    rpc: vi.fn((name: string, args: Record<string, unknown>) => {
+      if (name === "enroll_verified_student") {
+        insertCalls.push({ class_id: args.p_class_id, student_id: args.p_student_id });
+        return Promise.resolve(insertResult);
+      }
+      return { maybeSingle: vi.fn(() => Promise.resolve(rpcResults.shift() ?? { data: null, error: null })) };
+    }),
     from: vi.fn(() => ({
       insert: vi.fn((payload: Record<string, unknown>) => {
         insertCalls.push(payload);
@@ -27,7 +31,7 @@ function makeSupabase() {
   };
 }
 
-const { enrollStudent, POST } = await import("./route");
+const { enrollStudent } = await import("./route");
 
 const baseParams = {
   classId: "class-1",
@@ -49,19 +53,19 @@ describe("enrollStudent", () => {
   it("surfaces a clear error when the lookup RPC itself fails, instead of silently attempting account creation", async () => {
     rpcResults = [{ data: null, error: { message: "connection reset" } }];
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result).toEqual({ ok: false, status: 500, error: expect.stringContaining("Try again") });
     expect(createUserMock).not.toHaveBeenCalled();
   });
 
   it("rejects an empty password before touching the database", async () => {
-    const result = await enrollStudent(makeSupabase() as any, { ...baseParams, studentPassword: "" });
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], { ...baseParams, studentPassword: "" });
     expect(result).toEqual({ ok: false, status: 400, error: expect.stringContaining("at least 6 characters") });
   });
 
   it("rejects a password shorter than 6 characters with a clear message", async () => {
-    const result = await enrollStudent(makeSupabase() as any, { ...baseParams, studentPassword: "abc" });
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], { ...baseParams, studentPassword: "abc" });
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.status).toBe(400);
@@ -73,7 +77,7 @@ describe("enrollStudent", () => {
   it("does not reject a short/empty password when the student already has an account (password is never used on that path)", async () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Priya" }, error: null }];
 
-    const result = await enrollStudent(makeSupabase() as any, { ...baseParams, studentPassword: "" });
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], { ...baseParams, studentPassword: "" });
 
     expect(result).toEqual({ ok: true, studentName: "Priya", created: false });
     expect(createUserMock).not.toHaveBeenCalled();
@@ -82,7 +86,7 @@ describe("enrollStudent", () => {
   it("enrolls an existing student directly when the name matches, without creating a new account", async () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Priya" }, error: null }];
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result).toEqual({ ok: true, studentName: "Priya", created: false });
     expect(createUserMock).not.toHaveBeenCalled();
@@ -92,7 +96,7 @@ describe("enrollStudent", () => {
   it("matches names case-insensitively and ignoring surrounding whitespace, not a byte-exact comparison", async () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: " priya " }, error: null }];
 
-    const result = await enrollStudent(makeSupabase() as any, { ...baseParams, studentName: "PRIYA" });
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], { ...baseParams, studentName: "PRIYA" });
 
     expect(result).toEqual({ ok: true, studentName: " priya ", created: false });
   });
@@ -100,7 +104,7 @@ describe("enrollStudent", () => {
   it("flags a name mismatch instead of silently merging a different person into the existing account (the sibling-shared-email case)", async () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Raj" }, error: null }];
 
-    const result = await enrollStudent(makeSupabase() as any, { ...baseParams, studentName: "Priya" });
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], { ...baseParams, studentName: "Priya" });
 
     expect(result).toEqual({
       ok: false,
@@ -115,7 +119,7 @@ describe("enrollStudent", () => {
   it("proceeds with the name-mismatched account when the tutor explicitly confirms", async () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Raj" }, error: null }];
 
-    const result = await enrollStudent(makeSupabase() as any, {
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], {
       ...baseParams,
       studentName: "Priya",
       confirmed: true,
@@ -129,24 +133,22 @@ describe("enrollStudent", () => {
     rpcResults = [{ data: null, error: null }];
     createUserMock.mockResolvedValueOnce({ data: { user: { id: "student-new" } }, error: null });
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result).toEqual({ ok: true, studentName: "Priya", created: true });
     expect(insertCalls[0]).toEqual({ class_id: "class-1", student_id: "student-new" });
   });
 
-  it("passes schoolId explicitly in user_metadata so handle_new_user() doesn't fall back to domain matching", async () => {
+  it("passes schoolId explicitly in app_metadata so handle_new_user() doesn't fall back to domain matching", async () => {
     rpcResults = [{ data: null, error: null }];
     createUserMock.mockResolvedValueOnce({ data: { user: { id: "student-new" } }, error: null });
 
-    await enrollStudent(makeSupabase() as any, baseParams);
+    await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(createUserMock).toHaveBeenCalledWith(
       expect.objectContaining({
-        user_metadata: expect.objectContaining({
+        app_metadata: expect.objectContaining({
           school_id: "school-1",
-          role: "student",
-          created_by_teacher_id: "teacher-1",
         }),
       })
     );
@@ -163,7 +165,7 @@ describe("enrollStudent", () => {
       error: { code: "email_exists", message: "A user with this email address has already been registered" },
     });
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result).toEqual({ ok: true, studentName: "Priya Race", created: false });
     expect(insertCalls[0]).toEqual({ class_id: "class-1", student_id: "student-race" });
@@ -179,7 +181,7 @@ describe("enrollStudent", () => {
       error: { code: "user_already_exists", message: "A user with this email address has already been registered" },
     });
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -192,7 +194,7 @@ describe("enrollStudent", () => {
     rpcResults = [{ data: null, error: null }];
     createUserMock.mockResolvedValueOnce({ data: null, error: { code: "email_address_invalid", message: "Unable to validate email address: invalid format" } });
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -205,7 +207,7 @@ describe("enrollStudent", () => {
     rpcResults = [{ data: null, error: null }];
     createUserMock.mockResolvedValueOnce({ data: null, error: { code: "weak_password", message: "Password should be at least 8 characters" } });
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
@@ -218,7 +220,7 @@ describe("enrollStudent", () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Priya" }, error: null }];
     insertResult = { error: { code: "23505", message: "duplicate key" } };
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result).toEqual({ ok: false, status: 409, error: "Student is already enrolled" });
   });
@@ -227,7 +229,7 @@ describe("enrollStudent", () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Priya" }, error: null }];
     insertResult = { error: { code: "OTHER", message: "connection reset" } };
 
-    const result = await enrollStudent(makeSupabase() as any, baseParams);
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
     expect(result).toEqual({ ok: false, status: 500, error: "connection reset" });
   });
@@ -268,7 +270,10 @@ describe("POST /api/teacher — add_student wiring", () => {
             }
             return { insert: vi.fn((payload: Record<string, unknown>) => { insertCalls.push(payload); return Promise.resolve(insertResult); }) };
           }),
-          rpc: vi.fn(() => ({ maybeSingle: vi.fn(() => Promise.resolve(rpcResults.shift() ?? { data: null, error: null })) })),
+          rpc: vi.fn((name: string, args: Record<string, unknown>) => {
+            if (name === "enroll_verified_student") { insertCalls.push({ class_id: args.p_class_id, student_id: args.p_student_id }); return Promise.resolve(insertResult); }
+            return { maybeSingle: vi.fn(() => Promise.resolve(rpcResults.shift() ?? { data: null, error: null })) };
+          }),
         })
       ),
     }));
