@@ -44,7 +44,7 @@ Shiksha is a dual-agent pedagogy engine that transforms passive learning into ac
 
 ### Prerequisites
 
-- **Node.js 20+** — [nodejs.org](https://nodejs.org)
+- **Node.js 22+** — [nodejs.org](https://nodejs.org)
 - **pnpm 9+** — `npm i -g pnpm` (or use npm/yarn)
 - **Supabase project** — free at [supabase.com](https://supabase.com)
 - **OpenAI API key** — [platform.openai.com/api-keys](https://platform.openai.com/api-keys)
@@ -116,7 +116,8 @@ Open [http://localhost:3000](http://localhost:3000).
    directly (no self-signup needed — tell the student their email + password
    to log in with), or enter the email of a student who already self-signed-up
    (in a different browser/incognito, select "📘 Student" at `/signup`) to
-   enroll their existing account
+   enroll their existing account. Leave Temporary Password blank for an existing
+   account; a password is required only when a new account must be created.
 6. Student logs in → sees the topic on their dashboard → clicks to start teaching
 
 ### 7. Verify Everything Works
@@ -132,6 +133,11 @@ pnpm build
 ---
 
 ## Production Deployment
+
+Use the [live rollout guide](docs/deployment.md) for the ordered migration,
+hosting, email confirmation and smoke-test steps. `pnpm check:deployment`
+performs read-only checks against the configured project. GitHub Actions runs
+the automated checks on pull requests and pushes to `main`.
 
 The app has never had a confirmed live deployment — this is the checklist for the
 first one (Vercel + a fresh Supabase project; the app is stack-agnostic on hosting,
@@ -284,3 +290,9 @@ Validation commands for this revision:
   `PGLITE_MODULE=/tmp/shiksha-db-check/node_modules/@electric-sql/pglite/dist/index.js pnpm test:db`.
 
 See [the September code assessment](docs/reviews/2026-09-24-assessment.md) for the latest findings, improvements and remaining validation work.
+
+Signup now handles both immediate sessions and email-confirmation requirements.
+When confirmation is required, the student stays on a check-email screen instead
+of being redirected to an unauthenticated dashboard. Login preserves the requested
+lesson URL, and callback failures show recovery guidance. See the rollout guide
+for the corresponding Supabase redirect and email settings.

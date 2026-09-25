@@ -562,11 +562,11 @@ export default function TeacherSetupPage() {
               </p>
 
               <div className={styles.field}>
-                <label className={styles.label}>Class</label>
+                <label htmlFor="setup-field-8" className={styles.label}>Class</label>
                 <select id="setup-field-8"
                   className={styles.input}
                   value={studentClassId}
-                  onChange={(e) => setStudentClassId(e.target.value)}
+                  onChange={(e) => { setStudentClassId(e.target.value); setConfirmMismatch(null); }}
                   required
                 >
                   {classes.map((c) => (
@@ -584,7 +584,7 @@ export default function TeacherSetupPage() {
                   type="text"
                   placeholder="e.g. Priya Sharma"
                   value={studentName}
-                  onChange={(e) => setStudentName(e.target.value)}
+                  onChange={(e) => { setStudentName(e.target.value); setConfirmMismatch(null); }}
                   required
                 />
               </div>
@@ -596,7 +596,7 @@ export default function TeacherSetupPage() {
                   type="email"
                   placeholder="student@gmail.com"
                   value={studentEmail}
-                  onChange={(e) => setStudentEmail(e.target.value)}
+                  onChange={(e) => { setStudentEmail(e.target.value); setConfirmMismatch(null); }}
                   required
                 />
               </div>
@@ -604,7 +604,7 @@ export default function TeacherSetupPage() {
               <div className={styles.field}>
                 <label htmlFor="setup-field-11" className={styles.label}>
                   Temporary Password
-                  <span className={styles.labelHint}>only used if they don&apos;t have an account yet</span>
+                  <span className={styles.labelHint}>leave blank for an existing account; new accounts need at least 6 characters</span>
                 </label>
                 <input id="setup-field-11"
                   className={styles.input}
@@ -613,7 +613,7 @@ export default function TeacherSetupPage() {
                   placeholder="e.g. sunshine42"
                   value={studentPassword}
                   onChange={(e) => setStudentPassword(e.target.value)}
-                  required
+                  maxLength={200}
                 />
               </div>
 

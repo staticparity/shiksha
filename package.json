@@ -15,7 +15,9 @@
     "test:evals": "RUN_LIVE_EVALS=1 vitest run src/lib/agents/wisdom.eval.test.ts",
     "test:e2e:full-pipeline": "RUN_LIVE_E2E=1 playwright test e2e/full-pipeline.spec.ts",
     "test:e2e:teacher": "playwright test --config playwright.teacher.config.ts",
-    "test:db": "node scripts/test-db-security.mjs"
+    "test:db": "node scripts/test-db-security.mjs",
+    "test:deployment": "node --test scripts/check-deployment.test.mjs",
+    "check:deployment": "node --env-file-if-exists=.env.local scripts/check-deployment.mjs"
   },
   "dependencies": {
     "@ai-sdk/openai": "^3.0.52",

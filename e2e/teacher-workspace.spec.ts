@@ -96,3 +96,24 @@ test('mobile workspace has no page overflow and supports navigation', async ({ p
   await page.getByRole('link', { name:'Classes & topics' }).click();
   await expect(page).toHaveURL(/\/teacher\/setup/);
 });
+test('existing students need no temporary password and edited details discard stale confirmation', async ({page}) => {
+  const requests: Array<Record<string, unknown>> = [];
+  await page.route('**/api/teacher', route => {
+    const body=route.request().postDataJSON();
+    if (body.action === 'get_classes') return route.fulfill({json:[{id:'00000000-0000-4000-8000-000000000010',name:'Biology',subject:'Biology',grade:'8'}]});
+    requests.push(body);
+    if (requests.length === 1) return route.fulfill({status:409,json:{needsConfirmation:true,existingStudentName:'Raj',error:'Name mismatch'}});
+    return route.fulfill({json:{success:true,created:false,studentName:'Priya'}});
+  });
+  await page.goto('/teacher/setup?tab=student');
+  await expect(page.getByLabel('Class',{exact:true})).toBeVisible();
+  await page.getByLabel("Student's Name").fill('Priya');
+  await page.getByLabel("Student's Email").fill('raj@example.test');
+  await page.getByRole('button',{name:'Enroll Student',exact:true}).click();
+  await expect(page.getByRole('button',{name:"Yes, that's Raj"})).toBeVisible();
+  await page.getByLabel("Student's Email").fill('priya@example.test');
+  await expect(page.getByRole('button',{name:"Yes, that's Raj"})).toHaveCount(0);
+  await page.getByRole('button',{name:'Enroll Student',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Priya enrolled!');
+  expect(requests[1]).toMatchObject({studentPassword:'',confirmed:false,studentEmail:'priya@example.test'});
+});

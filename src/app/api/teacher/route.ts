@@ -15,6 +15,12 @@ type LookupResult =
   | { failed: false; student: { user_id: string; full_name: string } | null }
   | { failed: true };
 
+function checkStudentName(existingName: string, requestedName: string, email: string, confirmed?: boolean): EnrollResult | null {
+  if (existingName.trim().toLowerCase() === requestedName.trim().toLowerCase() || confirmed) return null;
+  return { ok: false, status: 409, needsConfirmation: true, existingStudentName: existingName,
+    error: `"${email}" is already registered to ${existingName}, not "${requestedName}".` };
+}
+
 async function lookupStudent(
   supabase: SupabaseServerClient,
   email: string,
@@ -49,9 +55,8 @@ async function verifyClassOwnership(
 /**
  * Enrolls a student by email — reusing their account if one already exists
  * in this school, or provisioning a new one (tutor-set password) if not.
- * school_id is passed explicitly into the new account's metadata so
- * handle_new_user() assigns it directly instead of falling back to
- * email-domain matching (see migrations/005_admin_provisioned_school_assignment.sql).
+ * Trusted app_metadata assigns provisioned students to this school; verified
+ * self-signups remain unassigned until enrollment (migration 006).
  */
 export async function enrollStudent(
   supabase: SupabaseServerClient,
@@ -89,16 +94,8 @@ export async function enrollStudent(
     // enrollment — same email, different intended person, no error. Same
     // name (the tutor knowingly re-enrolling a student they know already
     // has an account — the common case) proceeds without friction.
-    const nameMismatch = existing.full_name.trim().toLowerCase() !== studentName.trim().toLowerCase();
-    if (nameMismatch && !confirmed) {
-      return {
-        ok: false,
-        status: 409,
-        needsConfirmation: true,
-        existingStudentName: existing.full_name,
-        error: `"${studentEmail}" is already registered to ${existing.full_name}, not "${studentName}".`,
-      };
-    }
+    const mismatch = checkStudentName(existing.full_name, studentName, studentEmail, confirmed);
+    if (mismatch) return mismatch;
     studentId = existing.user_id;
     resolvedName = existing.full_name;
   } else {
@@ -133,9 +130,10 @@ export async function enrollStudent(
         // Race: signed up (or was already created by a retried request)
         // between our lookup and this call. If they're in THIS school,
         // enroll them like any existing student. If not found here at all,
-        // the email belongs to a different school — not retriable.
+        // it may be unverified or belong to another school.
         const retryLookup = await lookupStudent(supabase, studentEmail, schoolId);
-        if (retryLookup.failed || !retryLookup.student) {
+        if (retryLookup.failed) return { ok: false, status: 503, error: "Couldn't check enrollment status. Please try again." };
+        if (!retryLookup.student) {
           console.error("enrollStudent: createUser conflict, but retry lookup found no match in this school", {
             studentEmail,
             schoolId,
@@ -145,9 +143,11 @@ export async function enrollStudent(
           return {
             ok: false,
             status: 409,
-            error: `"${studentEmail}" is already registered to a different school. Ask them which account they used, or try a different email.`,
+            error: `"${studentEmail}" already has an account that cannot be enrolled here. Ask the student to verify their email and check their school membership.`,
           };
         }
+        const mismatch = checkStudentName(retryLookup.student.full_name, studentName, studentEmail, confirmed);
+        if (mismatch) return mismatch;
         studentId = retryLookup.student.user_id;
         resolvedName = retryLookup.student.full_name;
       } else if (isInvalidEmail) {
@@ -156,6 +156,8 @@ export async function enrollStudent(
           status: 400,
           error: `"${studentEmail}" doesn't look like a valid email address.`,
         };
+      } else if (createError.code === "weak_password") {
+        return { ok: false, status: 400, error: "Choose a stronger temporary password that meets your school's password requirements." };
       } else {
         console.error("enrollStudent: createUser failed with an unrecognized error code", {
           studentEmail,
@@ -186,7 +188,7 @@ export async function enrollStudent(
       code: enrollError.code,
       message: enrollError.message,
     });
-    return { ok: false, status: 500, error: enrollError.message };
+    return { ok: false, status: 500, error: "Couldn't finish enrollment. Your entries are still available; please try again." };
   }
 
   return { ok: true, studentName: resolvedName, created };
@@ -196,10 +198,19 @@ const teacherBody = z.discriminatedUnion("action", [
   z.object({ action: z.literal("get_classes") }),
   z.object({ action: z.literal("create_class"), name: z.string().trim().min(1).max(120), subject: z.string().trim().min(1).max(120), grade: z.string().trim().max(30).optional() }),
   z.object({ action: z.literal("create_topic"), classId: z.string().min(1).max(100), title: z.string().trim().min(1).max(200), subject: z.string().trim().min(1).max(120), chapter: z.string().max(200).optional(), description: z.string().max(2000).optional(), knowledgeConcepts: z.array(z.object({ concept: z.string().trim().min(1).max(200), description: z.string().trim().max(3000) })).max(30).optional() }),
-  z.object({ action: z.literal("add_student"), classId: z.string().min(1).max(100), studentEmail: z.email().max(254), studentName: z.string().trim().min(1).max(120), studentPassword: z.string().min(1).max(200), confirmed: z.boolean().optional() }),
+  z.object({ action: z.literal("add_student"), classId: z.string().min(1).max(100), studentEmail: z.string().trim().toLowerCase().pipe(z.email().max(254)), studentName: z.string().trim().min(1).max(120), studentPassword: z.string().max(200).default(""), confirmed: z.boolean().optional() }),
 ]);
 
 export async function POST(req: Request) {
+  try {
+    return await handleTeacherRequest(req);
+  } catch (error) {
+    console.error('[Teacher request]', error);
+    return Response.json({ error: "Could not complete this request. Your entries are still available; please try again." }, { status: 500 });
+  }
+}
+
+async function handleTeacherRequest(req: Request) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -297,9 +308,9 @@ export async function POST(req: Request) {
   // ── Add Student to Class ──────────────────────────────────────
   if (body.action === "add_student") {
     const { classId, studentEmail, studentName, studentPassword, confirmed } = body;
-    if (!classId || !studentEmail || !studentName || !studentPassword) {
+    if (!classId || !studentEmail || !studentName) {
       return Response.json(
-        { error: "classId, studentEmail, studentName, and studentPassword are required" },
+        { error: "classId, studentEmail, and studentName are required" },
         { status: 400 }
       );
     }
