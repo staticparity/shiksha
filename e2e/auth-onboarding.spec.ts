@@ -6,7 +6,7 @@ function session() {
   const encode=(value:unknown)=>Buffer.from(JSON.stringify(value)).toString('base64url');
   return {access_token:`${encode({alg:'HS256',typ:'JWT'})}.${encode({sub:id,exp:Math.floor(Date.now()/1000)+3600,role:'authenticated'})}.test`,refresh_token:'test',token_type:'bearer',expires_in:3600,user};
 }
-test('signup waits for email confirmation and supports correcting the address', async ({page}) => {
+test('signup waits for email confirmation and supports correcting the address', async ({page}, testInfo) => {
   await page.setViewportSize({width:390,height:844});
   let redirectTo='';
   await page.route('**/auth/v1/signup**', route => {
@@ -20,7 +20,7 @@ test('signup waits for email confirmation and supports correcting the address', 
   await page.getByRole('button',{name:'Create Account'}).click();
   await expect(page.getByRole('heading',{name:'Check your email'})).toBeVisible();
   expect(await page.evaluate(()=>document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({path:'/private/tmp/shiksha-email-confirmation-mobile.png'});
+  await page.screenshot({path:testInfo.outputPath('shiksha-email-confirmation-mobile.png')});
   expect(redirectTo).toBe('http://127.0.0.1:3100/callback');
   await expect(page).toHaveURL(/\/signup$/);
   await page.getByRole('button',{name:'Use a different email'}).click();

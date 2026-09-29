@@ -1,4 +1,5 @@
 import { loadStudentProgress } from "@/lib/learning/progress";
+import { loadStudentCredits, loadStudentStreak } from "@/lib/learning/rewards";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
@@ -40,26 +41,10 @@ export default async function StudentDashboard() {
     ...(progressByTopic.get(topic.id) ?? { bestScore: null, latestScore: null, lastAttempt: null }),
   }));
 
-  // Get streak
-  const { data: streak } = await supabase
-    .from("streaks")
-    .select("current_streak, longest_streak")
-    .eq("student_id", user.id)
-    .limit(1)
-    .single();
-
-  // Get credits
-  const { data: credits } = await supabase
-    .from("mastery_credits")
-    .select("credits_earned, earned_at")
-    .eq("student_id", user.id);
-
-  const totalCredits = (credits ?? []).reduce((sum, c) => sum + c.credits_earned, 0);
-  const oneWeekAgo = new Date();
-  oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-  const weeklyCredits = (credits ?? [])
-    .filter((c) => new Date(c.earned_at) > oneWeekAgo)
-    .reduce((sum, c) => sum + c.credits_earned, 0);
+  const [streak, credits] = await Promise.all([
+    loadStudentStreak(supabase, user.id),
+    loadStudentCredits(supabase, user.id),
+  ]);
 
   const allScores = topicScores.map((t) => t.latestScore);
   const progress = calculateOverallProgress(allScores);
@@ -78,10 +63,10 @@ export default async function StudentDashboard() {
               You&apos;ve mastered {masteredCount} of {topicScores.length} concepts
             </p>
           </div>
-          {streak && streak.current_streak > 0 && (
+          {streak > 0 && (
             <div className={styles.streakBadge}>
               <span>🔥</span>
-              <span>{streak.current_streak} day streak</span>
+              <span>{streak} day streak</span>
             </div>
           )}
         </div>
@@ -156,22 +141,22 @@ export default async function StudentDashboard() {
           <div className={styles.creditsRow}>
             <div className={styles.creditStat}>
               <span className={styles.creditIcon}>🎯</span>
-              <span className={styles.creditValue}>{totalCredits}</span>
+              <span className={styles.creditValue}>{credits.total}</span>
               <span className={styles.creditLabel}>earned</span>
             </div>
             <div className={styles.creditDivider} />
             <div className={styles.creditStat}>
               <span className={styles.creditIcon}>📈</span>
-              <span className={styles.creditValue}>+{weeklyCredits}</span>
-              <span className={styles.creditLabel}>this week</span>
+              <span className={styles.creditValue}>+{credits.lastSevenDays}</span>
+              <span className={styles.creditLabel}>last 7 days</span>
             </div>
-            {streak && streak.current_streak > 0 && (
+            {streak > 0 && (
               <>
                 <div className={styles.creditDivider} />
                 <div className={styles.creditStat}>
                   <span className={styles.creditIcon}>🔥</span>
                   <span className={styles.creditValue}>
-                    {streak.current_streak}
+                    {streak}
                   </span>
                   <span className={styles.creditLabel}>day streak</span>
                 </div>

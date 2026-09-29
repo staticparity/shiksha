@@ -75,7 +75,15 @@ test('progress shows the recent result separately from the personal best',async(
   await expect(topic).toContainText('35%');
   await expect(topic).toContainText('Personal best: 95%');
 });
-test('mobile lesson fits the viewport and composition Enter does not send',async({page})=>{
+test('dashboard counts all credits and hides expired streaks in both locations', async ({page}) => {
+  await page.goto('/dashboard');
+  await expect(page.getByText('1003', {exact:true})).toBeVisible();
+  await expect(page.getByText('+3', {exact:true})).toBeVisible();
+  await expect(page.getByText('last 7 days', {exact:true})).toBeVisible();
+  await expect(page.getByText('99 day streak', {exact:true})).toHaveCount(0);
+  await expect(page.getByRole('banner').getByText('99', {exact:true})).toHaveCount(0);
+});
+test('mobile lesson fits the viewport and composition Enter does not send',async({page}, testInfo)=>{
   await page.setViewportSize({width:390,height:844});
   await page.goto(`/teach/${topicId}`);
   const input=page.getByRole('textbox',{name:'Type your explanation'});
@@ -92,5 +100,5 @@ test('mobile lesson fits the viewport and composition Enter does not send',async
   expect(bounds!.x).toBeGreaterThanOrEqual(0);
   expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(390);
   await bubble.evaluate(node => node.getAnimations().forEach(animation => animation.finish()));
-  await page.screenshot({path:'/private/tmp/shiksha-lesson-mobile.png',fullPage:true});
+  await page.screenshot({path:testInfo.outputPath('shiksha-lesson-mobile.png'),fullPage:true});
 });

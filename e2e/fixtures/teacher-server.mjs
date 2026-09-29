@@ -12,6 +12,11 @@ for (const [index, enrollment] of enrollments.slice(0, 9).entries()) {
   if (index === 0) session.gaps = [{concept:'Energy conversion',severity:'critical',explanation:'The explanation did not connect light energy to stored chemical energy.'}];
 }
 const studentId = id(700);
+const credits = [
+  ...Array.from({length:1000}, (_,i) => ({id:id(10000+i),student_id:studentId,credits_earned:1,earned_at:'2000-01-01T00:00:00Z'})),
+  {id:id(11000),student_id:studentId,credits_earned:3,earned_at:new Date().toISOString()},
+];
+const streaks = [{student_id:studentId,school_id:id(2),current_streak:99,last_activity_date:'2000-01-01',streak_freezes_available:2}];
 sessions.push(
   {id:id(9001), student_id:studentId, topic_id:id(20), class_id:id(10), status:'completed', mastery_score:95, ended_at:'2026-09-20T00:00:00Z', started_at:'2026-09-20T00:00:00Z', gaps:[]},
   {id:id(9002), student_id:studentId, topic_id:id(20), class_id:id(10), status:'completed', mastery_score:35, ended_at:'2026-09-23T00:00:00Z', started_at:'2026-09-23T00:00:00Z', gaps:[]},
@@ -31,14 +36,16 @@ const server = http.createServer((req,res)=> {
   else if(url.pathname==='/health') body={ok:true};
   else {
     const table=url.pathname.split('/').at(-1);
-    let rows = table==='classes'?classes:table==='school_members'?[{role:isStudent?'student':'teacher',school_id:id(2)}]:table==='profiles'?[{id:currentUser.id,full_name:currentUser.user_metadata.full_name}]:table==='topics'?topics.map(t=>({...t,classes:{school_id:id(2),name:'8-B Biology',subject:'Biology',grade:'8'}})):table==='class_enrollments'?enrollments:table==='sessions'?sessions:[];
+    let rows = table==='classes'?classes:table==='school_members'?[{role:isStudent?'student':'teacher',school_id:id(2)}]:table==='profiles'?[{id:currentUser.id,full_name:currentUser.user_metadata.full_name}]:table==='topics'?topics.map(t=>({...t,classes:{school_id:id(2),name:'8-B Biology',subject:'Biology',grade:'8'}})):table==='class_enrollments'?enrollments:table==='sessions'?sessions:table==='mastery_credits'?credits:table==='streaks'?streaks:[];
     for(const key of ['id','class_id','student_id','topic_id','status']) { const value=url.searchParams.get(key); if(value?.startsWith('eq.')) rows=rows.filter(r=>r[key]===value.slice(3)); }
     const order = url.searchParams.get('order');
     if (order) rows = [...rows].sort((a,b) => {
       for (const part of order.split(',')) { const [key, direction] = part.split('.'); const comparison = String(a[key] ?? '').localeCompare(String(b[key] ?? '')); if (comparison) return direction === 'desc' ? -comparison : comparison; }
       return 0;
     });
-    if(url.searchParams.has('limit')) rows=rows.slice(Number(url.searchParams.get('offset') ?? 0), Number(url.searchParams.get('offset') ?? 0)+Number(url.searchParams.get('limit')));
+    // Mirror Supabase's default response cap so missing pagination is visible.
+    const offset = Number(url.searchParams.get('offset') ?? 0);
+    rows = rows.slice(offset, offset + Math.min(Number(url.searchParams.get('limit') ?? 1000), 1000));
     if(req.headers.accept?.includes('vnd.pgrst.object')) body=rows[0]??null;
     else body=rows;
   }
