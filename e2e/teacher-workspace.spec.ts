@@ -7,7 +7,7 @@ test.beforeEach(async ({ context }) => {
   const token = `${encode({ alg: 'HS256', typ: 'JWT' })}.${encode({ sub: teacherId, exp: Math.floor(Date.now()/1000)+3600, role: 'authenticated' })}.test`;
   await context.addCookies([{ name:'sb-127-auth-token', value:`base64-${encode({ access_token:token,refresh_token:'test',expires_at:Math.floor(Date.now()/1000)+3600,expires_in:3600,token_type:'bearer',user })}`, domain:'127.0.0.1', path:'/' }]);
 });
-test('class progress, search, filters, pagination, and student check-in', async ({ page }) => {
+test('class progress, search, filters, pagination, and student check-in', async ({ page }, testInfo) => {
   await page.goto('/teacher/dashboard');
   await expect(page.getByRole('heading', { name:'Student understanding' })).toBeVisible();
   await expect(page.getByText('1–15 of 23 students')).toBeVisible();
@@ -27,7 +27,7 @@ test('class progress, search, filters, pagination, and student check-in', async 
   await expect(page.getByText('1–8 of 8 students')).toBeVisible();
   await page.getByRole('combobox', { name:'Filter students' }).selectOption('all');
   await page.evaluate(() => window.scrollTo({ top:0, behavior:'instant' }));
-  await page.screenshot({ path:'/private/tmp/shiksha-teacher-desktop.png', fullPage:true });
+  await page.screenshot({ path:testInfo.outputPath('shiksha-teacher-desktop.png'), fullPage:true });
   await page.getByRole('combobox', { name:'Class overview' }).selectOption('00000000-0000-4000-8000-000000000011');
   await expect(page.getByRole('heading', { name:'Make room for your learners.' })).toBeVisible();
 });
@@ -58,7 +58,7 @@ test('failed dashboard requests offer a working retry', async ({ page }) => {
   await page.getByRole('button', { name:'Try again' }).click();
   await expect(page.getByRole('heading', { name:'Student understanding' })).toBeVisible();
 });
-test('setup links preserve class, network errors preserve entries, and new classes become selected', async ({ page }) => {
+test('setup links preserve class, network errors preserve entries, and new classes become selected', async ({ page }, testInfo) => {
   let created = false;
   await page.route('**/api/teacher', async route => {
     const body = route.request().postDataJSON();
@@ -78,21 +78,42 @@ test('setup links preserve class, network errors preserve entries, and new class
   await page.getByLabel('Subject', { exact:true }).fill('Chemistry');
   await page.getByRole('button', { name:/Create Class.*→/ }).click();
   await expect(page.getByLabel('Class', { exact:true })).toHaveValue('new-class');
-  await page.screenshot({ path:'/private/tmp/shiksha-teacher-setup.png', fullPage:true });
+  await page.screenshot({ path:testInfo.outputPath('shiksha-teacher-setup.png'), fullPage:true });
 });
-test('mobile workspace has no page overflow and supports navigation', async ({ page }) => {
+test('mobile workspace has no page overflow and supports navigation', async ({ page }, testInfo) => {
   await page.setViewportSize({ width:390,height:844 });
   await page.goto('/teacher/dashboard');
   await expect(page.getByRole('heading', { name:'Student understanding' })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path:'/private/tmp/shiksha-teacher-mobile.png', fullPage:true });
+  await page.screenshot({ path:testInfo.outputPath('shiksha-teacher-mobile.png'), fullPage:true });
   await page.getByRole('button', {name:/Aanya Patel/}).click();
   const dialog = page.getByRole('dialog', {name:'Aanya Patel'});
   await expect(dialog).toBeVisible();
   expect(await dialog.evaluate(node => node.scrollWidth <= node.clientWidth)).toBe(true);
-  await page.screenshot({path:'/private/tmp/shiksha-teacher-check-in-mobile.png'});
+  await page.screenshot({path:testInfo.outputPath('shiksha-teacher-check-in-mobile.png')});
   await page.keyboard.press('Escape');
   await page.getByRole('button', { name:'Toggle navigation' }).click();
   await page.getByRole('link', { name:'Classes & topics' }).click();
   await expect(page).toHaveURL(/\/teacher\/setup/);
+});
+test('existing students need no temporary password and edited details discard stale confirmation', async ({page}) => {
+  const requests: Array<Record<string, unknown>> = [];
+  await page.route('**/api/teacher', route => {
+    const body=route.request().postDataJSON();
+    if (body.action === 'get_classes') return route.fulfill({json:[{id:'00000000-0000-4000-8000-000000000010',name:'Biology',subject:'Biology',grade:'8'}]});
+    requests.push(body);
+    if (requests.length === 1) return route.fulfill({status:409,json:{needsConfirmation:true,existingStudentName:'Raj',error:'Name mismatch'}});
+    return route.fulfill({json:{success:true,created:false,studentName:'Priya'}});
+  });
+  await page.goto('/teacher/setup?tab=student');
+  await expect(page.getByLabel('Class',{exact:true})).toBeVisible();
+  await page.getByLabel("Student's Name").fill('Priya');
+  await page.getByLabel("Student's Email").fill('raj@example.test');
+  await page.getByRole('button',{name:'Enroll Student',exact:true}).click();
+  await expect(page.getByRole('button',{name:"Yes, that's Raj"})).toBeVisible();
+  await page.getByLabel("Student's Email").fill('priya@example.test');
+  await expect(page.getByRole('button',{name:"Yes, that's Raj"})).toHaveCount(0);
+  await page.getByRole('button',{name:'Enroll Student',exact:true}).click();
+  await expect(page.getByRole('status')).toContainText('Priya enrolled!');
+  expect(requests[1]).toMatchObject({studentPassword:'',confirmed:false,studentEmail:'priya@example.test'});
 });

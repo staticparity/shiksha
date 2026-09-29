@@ -16,33 +16,52 @@ export default function SignupPage() {
   const [role, setRole] = useState<"student" | "teacher">("student");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [confirmationEmail, setConfirmationEmail] = useState("");
 
   const handleSignup = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        data: {
-          full_name: fullName,
-          role,
+    if (!fullName.trim()) { setError("Enter your name to continue."); setLoading(false); return; }
+    try {
+      const supabase = createClient();
+      const { data, error: authError } = await supabase.auth.signUp({
+        email: email.trim(),
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/callback`,
+          data: {
+            full_name: fullName.trim(),
+            role,
+          },
         },
-      },
-    });
+      });
 
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
 
-    router.push(role === "teacher" ? "/teacher/dashboard" : "/dashboard");
-    router.refresh();
+      if (!data.session) {
+        setConfirmationEmail(email.trim());
+        setPassword("");
+        return;
+      }
+
+      router.push(role === "teacher" ? "/teacher/dashboard" : "/dashboard");
+      router.refresh();
+    } catch {
+      setError("Could not connect. Check your connection and try again.");
+    } finally { setLoading(false); }
   };
+
+  if (confirmationEmail) return <div className={styles.container}><GlassCard padding="lg"><div className={styles.card}>
+    <div className={styles.header}><span className={styles.logo}>✉</span><h1 className={styles.title}>Check your email</h1></div>
+    <p className={styles.confirmation} role="status">Check <strong>{confirmationEmail}</strong> for a confirmation link. Open it in this browser to finish signing up. If no email arrives, check spam or try signing in with an existing account.</p>
+    <p className={styles.footer}><Link href="/login" className={styles.link}>Go to sign in</Link></p>
+    <Button variant="ghost" fullWidth onClick={() => setConfirmationEmail("")}>Use a different email</Button>
+  </div></GlassCard></div>;
 
   return (
     <div className={styles.container}>
@@ -54,12 +73,14 @@ export default function SignupPage() {
             <p className={styles.subtitle}>Start your learning journey</p>
           </div>
 
-          <form onSubmit={handleSignup} className={styles.form}>
+          <form onSubmit={handleSignup}><fieldset disabled={loading} className={styles.form}>
             <div className={styles.field}>
               <label htmlFor="fullName" className={styles.label}>Full Name</label>
               <input
                 id="fullName"
                 type="text"
+                autoComplete="name"
+                maxLength={120}
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className={styles.input}
@@ -73,6 +94,7 @@ export default function SignupPage() {
               <input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={styles.input}
@@ -86,6 +108,7 @@ export default function SignupPage() {
               <input
                 id="password"
                 type="password"
+                autoComplete="new-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={styles.input}
@@ -101,6 +124,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setRole("student")}
+                  aria-pressed={role === "student"}
                   style={{
                     flex: 1,
                     padding: "var(--space-2-5) var(--space-4)",
@@ -119,6 +143,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setRole("teacher")}
+                  aria-pressed={role === "teacher"}
                   style={{
                     flex: 1,
                     padding: "var(--space-2-5) var(--space-4)",
@@ -137,12 +162,12 @@ export default function SignupPage() {
               </div>
             </div>
 
-            {error && <p className={styles.error}>{error}</p>}
+            {error && <p role="alert" className={styles.error}>{error}</p>}
 
             <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
               Create Account
             </Button>
-          </form>
+          </fieldset></form>
 
           <p className={styles.footer}>
             Already have an account?{" "}

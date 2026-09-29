@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from "react";
-import { useRouter } from "next/navigation";
+import { Suspense, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { safeReturnPath } from "@/lib/auth/redirect";
 import { createClient } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
 import { GlassCard } from "@/components/ui/glass-card";
@@ -9,7 +10,12 @@ import Link from "next/link";
 import styles from "./page.module.css";
 
 export default function LoginPage() {
+  return <Suspense fallback={<p role="status" className={styles.container}>Loading sign in…</p>}><LoginForm /></Suspense>;
+}
+
+function LoginForm() {
   const router = useRouter();
+  const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -20,20 +26,23 @@ export default function LoginPage() {
     setLoading(true);
     setError("");
 
-    const supabase = createClient();
-    const { error: authError } = await supabase.auth.signInWithPassword({
-      email,
-      password,
-    });
+    try {
+      const supabase = createClient();
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
 
-    if (authError) {
-      setError(authError.message);
-      setLoading(false);
-      return;
-    }
+      if (authError) {
+        setError(authError.message);
+        return;
+      }
 
-    router.push("/dashboard");
-    router.refresh();
+      router.push(safeReturnPath(params.get("next"), window.location.origin));
+      router.refresh();
+    } catch {
+      setError("Could not connect. Check your connection and try again.");
+    } finally { setLoading(false); }
   };
 
   return (
@@ -46,12 +55,14 @@ export default function LoginPage() {
             <p className={styles.subtitle}>Sign in to continue teaching AI</p>
           </div>
 
-          <form onSubmit={handleLogin} className={styles.form}>
+          {params.get("error") === "auth_failed" && <p role="alert" className={styles.error}>This sign-in link could not be verified. It may have expired or been opened in another browser. Try signing in with your email and password.</p>}
+          <form onSubmit={handleLogin}><fieldset disabled={loading} className={styles.form}>
             <div className={styles.field}>
               <label htmlFor="email" className={styles.label}>Email</label>
               <input
                 id="email"
                 type="email"
+                autoComplete="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
                 className={styles.input}
@@ -65,6 +76,7 @@ export default function LoginPage() {
               <input
                 id="password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 className={styles.input}
@@ -74,12 +86,12 @@ export default function LoginPage() {
               />
             </div>
 
-            {error && <p className={styles.error}>{error}</p>}
+            {error && <p role="alert" className={styles.error}>{error}</p>}
 
             <Button type="submit" variant="primary" size="lg" fullWidth loading={loading}>
               Sign In
             </Button>
-          </form>
+          </fieldset></form>
 
           <p className={styles.footer}>
             Don&apos;t have an account?{" "}

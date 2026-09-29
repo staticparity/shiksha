@@ -158,7 +158,7 @@ describe("enrollStudent", () => {
     // First lookup: not found. Retry lookup after conflict: found.
     rpcResults = [
       { data: null, error: null },
-      { data: { user_id: "student-race", full_name: "Priya Race" }, error: null },
+      { data: { user_id: "student-race", full_name: "Priya" }, error: null },
     ];
     createUserMock.mockResolvedValueOnce({
       data: null,
@@ -167,7 +167,7 @@ describe("enrollStudent", () => {
 
     const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
-    expect(result).toEqual({ ok: true, studentName: "Priya Race", created: false });
+    expect(result).toEqual({ ok: true, studentName: "Priya", created: false });
     expect(insertCalls[0]).toEqual({ class_id: "class-1", student_id: "student-race" });
   });
 
@@ -186,7 +186,7 @@ describe("enrollStudent", () => {
     expect(result.ok).toBe(false);
     if (!result.ok) {
       expect(result.status).toBe(409);
-      expect(result.error).toContain("different school");
+      expect(result.error).toContain("cannot be enrolled here");
     }
   });
 
@@ -203,7 +203,7 @@ describe("enrollStudent", () => {
     }
   });
 
-  it("returns a generic fallback for an unrecognized account-creation error (e.g. a rejected weak password)", async () => {
+  it("returns a correctable validation error when Auth rejects a weak password", async () => {
     rpcResults = [{ data: null, error: null }];
     createUserMock.mockResolvedValueOnce({ data: null, error: { code: "weak_password", message: "Password should be at least 8 characters" } });
 
@@ -211,7 +211,7 @@ describe("enrollStudent", () => {
 
     expect(result.ok).toBe(false);
     if (!result.ok) {
-      expect(result.status).toBe(500);
+      expect(result.status).toBe(400);
       expect(result.error).not.toContain("undefined");
     }
   });
@@ -225,13 +225,28 @@ describe("enrollStudent", () => {
     expect(result).toEqual({ ok: false, status: 409, error: "Student is already enrolled" });
   });
 
-  it("returns 500 with the raw message for an unexpected enrollment DB error", async () => {
+  it("returns a recoverable message without leaking an unexpected database error", async () => {
     rpcResults = [{ data: { user_id: "student-1", full_name: "Priya" }, error: null }];
     insertResult = { error: { code: "OTHER", message: "connection reset" } };
 
     const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
 
-    expect(result).toEqual({ ok: false, status: 500, error: "connection reset" });
+    expect(result).toEqual({ ok: false, status: 500, error: expect.stringContaining("please try again") });
+    if (!result.ok) expect(result.error).not.toContain('connection reset');
+  });
+  it('requires name confirmation when a conflicting account appears during creation', async () => {
+    rpcResults = [{data:null,error:null},{data:{user_id:'sibling',full_name:'Raj'},error:null}];
+    createUserMock.mockResolvedValueOnce({data:null,error:{code:'email_exists'}});
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
+    expect(result).toMatchObject({ok:false,status:409,needsConfirmation:true,existingStudentName:'Raj'});
+    expect(insertCalls).toHaveLength(0);
+  });
+  it('does not label a failed retry lookup as a school mismatch', async () => {
+    rpcResults = [{data:null,error:null},{data:null,error:{message:'Database unavailable'}}];
+    createUserMock.mockResolvedValueOnce({data:null,error:{code:'email_exists'}});
+    const result = await enrollStudent(makeSupabase() as unknown as Parameters<typeof enrollStudent>[0], baseParams);
+    expect(result).toMatchObject({ok:false,status:503});
+    expect(insertCalls).toHaveLength(0);
   });
 });
 
@@ -279,9 +294,10 @@ describe("POST /api/teacher — add_student wiring", () => {
     }));
   }
 
-  it("returns 400 when studentPassword is missing", async () => {
+  it("enrolls an existing student when studentPassword is omitted", async () => {
     vi.resetModules();
     mockAuthedTeacher();
+    rpcResults = [{data:{user_id:'student-existing',full_name:'A'},error:null}];
     const { POST: freshPOST } = await import("./route");
 
     const res = await freshPOST(
@@ -289,8 +305,9 @@ describe("POST /api/teacher — add_student wiring", () => {
     );
     const body = await res.json();
 
-    expect(res.status).toBe(400);
-    expect(body.error).toContain("studentPassword");
+    expect(res.status).toBe(200);
+    expect(body).toMatchObject({success:true,created:false});
+    expect(createUserMock).not.toHaveBeenCalled();
   });
 
   it("returns 404 when classId doesn't belong to the calling teacher, without creating an account", async () => {

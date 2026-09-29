@@ -1,0 +1,46 @@
+name: Shiksha checks
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:54329
+      NEXT_PUBLIC_SUPABASE_ANON_KEY: test-only
+      SUPABASE_SERVICE_ROLE_KEY: test-only
+      OPENAI_API_KEY: test-only
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10.33.0
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm lint
+      - run: pnpm test
+      - run: pnpm test:deployment
+      - run: pnpm build
+      - name: Check migrations and database authorization
+        run: |
+          npm install --prefix "$RUNNER_TEMP/shiksha-db-check" @electric-sql/pglite@0.5.8 --ignore-scripts --no-audit --no-fund
+          PGLITE_MODULE="$RUNNER_TEMP/shiksha-db-check/node_modules/@electric-sql/pglite/dist/index.js" pnpm test:db
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm test:e2e:teacher
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: browser-test-results
+          path: test-results/
+          retention-days: 7
