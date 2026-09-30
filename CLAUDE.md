@@ -14,7 +14,9 @@ In QA mode, flag any code that doesn't match DESIGN.md.
   into a Vercel project
 - Deploy status command: `vercel ls --prod` (requires `vercel` CLI + login) or check
   the Vercel dashboard
-- Merge method: direct push to main (no PR workflow currently)
+- Merge method: PR + GitHub Actions CI (`.github/workflows/ci.yml` — lint, unit
+  tests, build, DB/RLS checks, teacher-workspace e2e) required to pass before
+  merge; direct push to main is no longer the norm as of PR #3/#4 (2026-09)
 - Project type: web app (Next.js 16)
 - Post-deploy health check: HTTP GET on the production URL once known
 
