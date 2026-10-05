@@ -206,7 +206,7 @@
 
 .logoutBtn:hover {
   background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
+  color: var(--tw-danger);
 }
 
 /* ── Mobile Toggle ───────────────────────────────────────────── */
@@ -289,13 +289,13 @@
   }
 }
 
-.sidebar { background: #f0eee5; border-color: #ded8c9; padding-top: 28px; }
+.sidebar { background: #f0eee5; border-color: var(--tw-border); padding-top: 28px; }
 .logoIcon { color: #587347; }
 .logoText { font-family: var(--font-display); font-size: 25px; font-weight: 500; }
 .navItem[data-active="true"] { background: #e2e7d7; color: #425a35; }
 .navItem[data-active="true"]::before { background: #587347; }
 .avatar { background: #617551; }
-.sidebar :is(a,button):focus-visible { outline: 3px solid #9b713c; outline-offset: 2px; }
+.sidebar :is(a,button):focus-visible { outline: 3px solid var(--tw-focus-ring); outline-offset: 2px; }
 @media(max-width:768px) { .sidebar[data-collapsed="true"] .logoText, .sidebar[data-collapsed="true"] .navLabel { display: block; } }
 
 @media (max-width: 768px) { .sidebar { visibility: hidden; }.sidebar[data-mobile-open="true"] { visibility: visible; } }
