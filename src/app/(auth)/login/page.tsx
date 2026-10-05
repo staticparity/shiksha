@@ -50,7 +50,7 @@ function LoginForm() {
       <GlassCard padding="lg">
         <div className={styles.card}>
           <div className={styles.header}>
-            <span className={styles.logo}>🎓</span>
+            <span className={styles.logo}>✳</span>
             <h1 className={styles.title}>Welcome back</h1>
             <p className={styles.subtitle}>Sign in to continue teaching AI</p>
           </div>
