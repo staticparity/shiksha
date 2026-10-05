@@ -103,13 +103,21 @@ through the same enrollment flow.
 
 ---
 
-## Eng: Route-wide logging + fix plain-text 401/403 in chat/route.ts and topics/route.ts
+## Eng: Route-wide logging + fix plain-text 401/403 in chat/route.ts
+
+**Status (2026-09-30): partially done.** PR #4 fixed `topics/route.ts` — it now
+returns `Response.json({error}, {status})` throughout and validates its body
+with Zod. `chat/route.ts` still has the plain-text `new Response("Unauthorized",
+{status:401})` bug described below, and `create_class`/`create_topic`/
+`get_classes` in `teacher/route.ts` still have no logging at their DB-error
+branches (only the route's top-level catch-all logs, and only for thrown
+exceptions, not `{data,error}`-style Supabase error returns).
 
 **What:** Add structured logging to `create_class`, `create_topic`, and
 `get_classes` in `src/app/api/teacher/route.ts` (only `add_student` got
-logging in this pass). Also fix `chat/route.ts` and `topics/route.ts`, which
-have the same `new Response("Unauthorized", { status: 401 })` plain-text bug
-that `teacher/route.ts` had — a session-expiry mid-action crashes the
+logging in this pass). Also fix `chat/route.ts`, which still has the same
+`new Response("Unauthorized", { status: 401 })` plain-text bug that
+`teacher/route.ts` had — a session-expiry mid-action crashes the
 client's `res.json()` call and freezes the UI silently.
 
 **Why:** Surfaced during `/plan-ceo-review` (2026-08-25) Sections 4 and 8

@@ -219,6 +219,10 @@ src/
 │   │   ├── learner.ts    # Zero-knowledge Socratic agent
 │   │   ├── evaluator.ts  # Inter-turn understanding scorer
 │   │   └── wisdom.ts     # Final mastery evaluator
+│   ├── api/              # Request validation (Zod schemas, readBody)
+│   ├── auth/             # Login return-path safety (open-redirect guard)
+│   ├── dashboard/        # Teacher dashboard summary/aggregation
+│   ├── learning/         # Student progress, streaks, credits
 │   ├── scoring/          # Mastery calculator, credits, streaks
 │   ├── supabase/         # Client/server/proxy helpers
 │   └── utils/            # Formatting, classnames
