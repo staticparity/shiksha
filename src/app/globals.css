@@ -144,6 +144,26 @@ ul, ol {
   --font-semibold: 600;
   --font-bold: 700;
 
+  /* Teacher workspace — dashboard/setup/sidebar's own muted palette, distinct
+     from the brand accent tokens above (Understanding/Explanation axis colors
+     aren't the right fit for routine workspace chrome). Extracted verbatim
+     from what shipped as hardcoded hex in page.module.css override blocks —
+     values unchanged, just named, so the actual color choice stays exactly
+     what it already was. */
+  --tw-text: #423B30;
+  --tw-text-secondary: #776D5E;
+  --tw-text-muted: #786D5C;
+  --tw-text-faint: #796B55;
+  --tw-border: #DED8C9;
+  --tw-border-subtle: #E5DFD1;
+  --tw-accent: #435B3D;
+  --tw-accent-deep: #536C43;
+  --tw-heading-accent: #405336;
+  --tw-highlight-bg: #EDF0E3;
+  --tw-critical-text: #9D422C;
+  --tw-danger: #EF4444;
+  --tw-focus-ring: #9B713C;
+
   /* Spacing (4px base) */
   --space-0: 0;
   --space-px: 1px;

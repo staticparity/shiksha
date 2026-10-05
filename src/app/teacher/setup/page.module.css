@@ -40,7 +40,7 @@
 .toastError {
   background: rgba(239, 68, 68, 0.15);
   border: 1px solid rgba(239, 68, 68, 0.3);
-  color: #ef4444;
+  color: var(--tw-danger);
 }
 
 @keyframes slideDown {
@@ -443,7 +443,7 @@ select.input {
 }
 
 .removeBtn:hover {
-  color: #ef4444;
+  color: var(--tw-danger);
 }
 
 .addConceptBtn {
@@ -547,34 +547,34 @@ select.input {
 }
 
 /* Teacher workspace: quiet surfaces, a clear hierarchy, and room to write. */
-.container { padding: 44px 40px 64px; color: #423b30; }
+.container { padding: 44px 40px 64px; color: var(--tw-text); }
 .content { max-width: 1020px; }
 .pageHeader { display: flex; align-items: center; justify-content: space-between; gap: 20px; }
-.eyebrow { font-size: 10px; letter-spacing: .16em; font-weight: 900; color: #796b55; margin-bottom: 12px; }
+.eyebrow { font-size: 10px; letter-spacing: .16em; font-weight: 900; color: var(--tw-text-faint); margin-bottom: 12px; }
 .pageTitle { font-family: var(--font-display); font-weight: 500; font-size: clamp(28px, 3vw, 38px); line-height: 1.2; letter-spacing: -.03em; }
-.pageSubtitle { max-width: 600px; margin: 16px 0 30px; color: #776d5e; line-height: 1.8; }
-.backLink { white-space: nowrap; font-size: 12px; color: #536c43; }
+.pageSubtitle { max-width: 600px; margin: 16px 0 30px; color: var(--tw-text-secondary); line-height: 1.8; }
+.backLink { white-space: nowrap; font-size: 12px; color: var(--tw-accent-deep); }
 .tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0; border: 1px solid #dcd7c8; border-radius: 10px; overflow: hidden; }
-.tab { border: 0; border-radius: 0; justify-content: center; padding: 17px 10px; background: #fffcf5; color: #756b5b; }
-.tab + .tab { border-left: 1px solid #ded8c9; }
+.tab { border: 0; border-radius: 0; justify-content: center; padding: 17px 10px; background: var(--bg-secondary); color: #756b5b; }
+.tab + .tab { border-left: 1px solid var(--tw-border); }
 .tabActive { background: #e8eddd; color: #415a35; }
-.tabActive .tabStep { background: #536c43; }
+.tabActive .tabStep { background: var(--tw-accent-deep); }
 .tabStep { color: #756b5b; background: #ebe5d7; margin-right: 5px; }
 .form { border: 0; padding: 12px; min-width: 0; }
 .formTitle { font-family: var(--font-display); font-size: 27px; font-weight: 500; }
-.formHint { max-width: 660px; color: #776d5e; line-height: 1.8; }
-.input, .textarea, .conceptInput, .conceptDesc { background: #fffdf8; border-color: #dcd7c8; color: #423b30; border-radius: 8px; min-height: 44px; }
+.formHint { max-width: 660px; color: var(--tw-text-secondary); line-height: 1.8; }
+.input, .textarea, .conceptInput, .conceptDesc { background: #fffdf8; border-color: #dcd7c8; color: var(--tw-text); border-radius: 8px; min-height: 44px; }
 .input:focus, .textarea:focus, .conceptInput:focus, .conceptDesc:focus { border-color: #698250; box-shadow: 0 0 0 3px #69825022; }
 .label { color: #574d3d; }.labelHint, .conceptHint { color: #807259; }
-.submitBtn { background: #435b3d; color: #fffdf5; border-radius: 8px; min-height: 46px; }
+.submitBtn { background: var(--tw-accent); color: #fffdf5; border-radius: 8px; min-height: 46px; }
 .submitBtn:hover:not(:disabled) { background: #31462b; }
 .generateSection { background: #f2f2e7; border: 1px solid #dce1cb; border-radius: 10px; padding: 20px; }
-.generateBtn, .addConceptBtn { color: #435b3d; }
+.generateBtn, .addConceptBtn { color: var(--tw-accent); }
 .conceptNumber { background: #ececdd; color: #5d6d49; }
 .toast { display: flex; align-items: center; justify-content: space-between; gap: 15px; animation: none; }
 .toastSuccess { background: #e7efdf; border-color: #cbdaba; color: #3f5d31; }.toastError { background: #f8e8de; border-color: #eac7b4; color: #963e29; }
 .toast button { padding: 4px 8px; }
-.loadNotice { padding: 12px 0 22px; font-size: 13px; }.loadNotice button { color: #435b3d; text-decoration: underline; }
+.loadNotice { padding: 12px 0 22px; font-size: 13px; }.loadNotice button { color: var(--tw-accent); text-decoration: underline; }
 .classItem { display: flex; padding: 4px; }.classIcon { color: #5c7349; }.classItem:hover .classItemName { text-decoration: underline; }
-.container :is(a,button,input,select,textarea):focus-visible { outline: 3px solid #9b713c; outline-offset: 3px; }
+.container :is(a,button,input,select,textarea):focus-visible { outline: 3px solid var(--tw-focus-ring); outline-offset: 3px; }
 @media (max-width: 768px) { .container { padding: 80px 18px 35px; }.pageHeader { align-items: flex-start; flex-direction: column-reverse; }.pageTitle { font-size: 32px; }.form { padding: 0; }.tab { font-size: 11px; padding: 14px 5px; }.tabStep { display: none; }.generateSection { padding: 14px; } }

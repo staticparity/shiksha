@@ -1,7 +1,7 @@
 .layout {
   display: flex;
   background: #f7f5ee;
-  color: #423b30;
+  color: var(--tw-text);
   min-height: 100vh;
 }
 
